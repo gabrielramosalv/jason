@@ -46,6 +46,7 @@ public class Config extends Properties {
 
     public static final String MIND_INSP_ARCH_CLASS_NAME  = "mindInspectorArchClassName";
     public static final String MIND_INSP_WEB_SERVER_CLASS_NAME  = "mindInspectorWebServerClassName";
+    public static final String MIND_API_WEB_SERVER_CLASS_NAME   = "jason.mind.api.bootstrap.MindApiManager";
 
 
     protected static Config    singleton     = null;
@@ -527,7 +528,12 @@ public class Config extends Properties {
     }
     public String getMindInspectorWebServerClassName() {
         if (getProperty(MIND_INSP_WEB_SERVER_CLASS_NAME) == null) {
-            return jason.architecture.MindInspectorWebImpl.class.getName();
+            try {
+                Class.forName(MIND_API_WEB_SERVER_CLASS_NAME);
+                return MIND_API_WEB_SERVER_CLASS_NAME;
+            } catch (ClassNotFoundException e) {
+                return jason.architecture.MindInspectorWebImpl.class.getName();
+            }
         } else {
             return getProperty(MIND_INSP_WEB_SERVER_CLASS_NAME);
         }
