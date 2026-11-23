@@ -5,3 +5,4 @@ rootProject.name = 'jason'
 include('jason-cli')
 include('jason-interpreter')
 
+include('jason-mind-api')

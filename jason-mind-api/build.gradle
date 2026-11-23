@@ -1,0 +1,54 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+version "${jasonVersion}"
+group   "${groupId}"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withJavadocJar()
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        url "https://jitpack.io"
+        content { includeGroup "com.github.gabrielramosalv.peel-web" }
+    }
+}
+
+dependencies {
+    api project(':jason-interpreter')
+
+    implementation 'com.github.gabrielramosalv.peel-web:peel-web-core:v1.1.1'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+}
+
+jar {
+    archiveBaseName = 'jason-mind-api'
+    manifest {
+        attributes 'Specification-Title': 'Jason Mind API',
+                   'Specification-Version': project.version
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifactId = 'jason-mind-api'
+            from components.java
+        }
+    }
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
+    systemProperty "java.awt.headless", "true"
+}
