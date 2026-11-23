@@ -254,6 +254,8 @@ public class LocalAgArch extends AgArch implements Runnable, Serializable {
     }
 
     protected void reasoningCycle() {
+        jason.asSemantics.ReasoningListener rl = getTS().getReasoningListener();
+        if (rl != null) rl.cycleStarting(getTS(), getCycleNumber());
         getFirstAgArch().reasoningCycleStarting();
 
         sense();
@@ -261,6 +263,7 @@ public class LocalAgArch extends AgArch implements Runnable, Serializable {
         act();
 
         getFirstAgArch().reasoningCycleFinished();
+        if (rl != null) rl.cycleFinished(getTS(), getCycleNumber());
     }
 
     public void run() {
@@ -362,6 +365,8 @@ public class LocalAgArch extends AgArch implements Runnable, Serializable {
             else
                 return;
         }
+        jason.asSemantics.ReasoningListener rl = getTS() == null ? null : getTS().getReasoningListener();
+        if (rl != null) rl.messageSent(getTS(), m);
         rec.receiveMsg(m.clone()); // send a cloned message
 
         // notify listeners

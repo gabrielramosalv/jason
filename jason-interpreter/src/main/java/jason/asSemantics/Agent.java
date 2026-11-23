@@ -716,6 +716,8 @@ public class Agent implements Serializable, ToDOM {
                     if (relUn != null) {
                         if (rp == null) rp = new LinkedList<>();
                         rp.add(new Option(pl, relUn, event));
+                    } else if (ts != null && ts.getReasoningListener() != null) {
+                        ts.getReasoningListener().planEvaluated(ts, pl, false, false, java.util.Collections.emptyList());
                     }
                 }
             }
@@ -746,7 +748,9 @@ public class Agent implements Serializable, ToDOM {
                     if (getLogger().isLoggable(Level.FINE))
                         getLogger().log(Level.FINE, "option for "+getTS().getC().SE.getTrigger()+" is plan "+opt.getPlan().getLabel() + " " + opt.getPlan().getTrigger() + " : " + context + " -- with unification "+opt.getUnifier());
 
+                    ReasoningListener listener = getTS().getReasoningListener();
                     if (context == null) { // context is true
+                        if (listener != null) listener.planEvaluated(getTS(), opt.getPlan(), true, true, java.util.Collections.emptyList());
                         if (ap == null) ap = new LinkedList<>();
                         ap.add(opt);
                         if (getLogger().isLoggable(Level.FINE))
@@ -754,7 +758,9 @@ public class Agent implements Serializable, ToDOM {
                     } else {
                         boolean allUnifs = opt.getPlan().isAllUnifs() || bb.hasSelectOption();
 
-                        Iterator<Unifier> r = context.logicalConsequence(this, opt.getUnifier());
+                        ContextTermTracker tracker = listener == null ? null : new ContextTermTracker(context);
+                        Plan evaluatedPlan = opt.getPlan();
+                        Iterator<Unifier> r = tracker == null ? context.logicalConsequence(this, opt.getUnifier()) : tracker.logicalConsequence(this, opt.getUnifier());
                         boolean isApplicable = false;
                         if (r != null) {
                             while (r.hasNext()) {
@@ -775,6 +781,8 @@ public class Agent implements Serializable, ToDOM {
                             }
                         }
 
+                        if (tracker != null)
+                            listener.planEvaluated(getTS(), evaluatedPlan, true, isApplicable, tracker.results());
                         if (!isApplicable && getLogger().isLoggable(Level.FINE))
                             getLogger().log(Level.FINE, "     "+opt.getPlan().getLabel() + " is not applicable");
                     }

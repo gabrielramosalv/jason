@@ -57,6 +57,20 @@ public class TransitionSystem implements Serializable {
 
     private Queue<RunnableSerializable> taskForBeginOfCycle = new ConcurrentLinkedQueue<>();
 
+    private transient volatile ReasoningListener reasoningListener = null;
+
+    public void setReasoningListener(ReasoningListener l) { reasoningListener = l; }
+    public ReasoningListener getReasoningListener()       { return reasoningListener; }
+
+    private void stepStarting(ReasoningListener.Step s) {
+        ReasoningListener l = reasoningListener;
+        if (l != null) l.stepStarting(this, s);
+    }
+    private void stepFinished(ReasoningListener.Step s) {
+        ReasoningListener l = reasoningListener;
+        if (l != null) l.stepFinished(this, s);
+    }
+
     public TransitionSystem(Agent a, Circumstance c, Settings s, AgArch ar) {
         ag     = a;
         agArch = ar;
@@ -177,7 +191,8 @@ public class TransitionSystem implements Serializable {
     private void applySemanticRuleSense() throws JasonException {
         switch (stepSense) {
         case StartRC:
-            applyProcMsg();
+            stepStarting(ReasoningListener.Step.PROCESS_MESSAGES);
+            try { applyProcMsg(); } finally { stepFinished(ReasoningListener.Step.PROCESS_MESSAGES); }
             break;
         default:
             break;
@@ -187,22 +202,28 @@ public class TransitionSystem implements Serializable {
     private void applySemanticRuleDeliberate() throws JasonException {
         switch (stepDeliberate) {
         case SelEv:
-            applySelEv();
+            stepStarting(ReasoningListener.Step.SELECT_EVENT);
+            try { applySelEv(); } finally { stepFinished(ReasoningListener.Step.SELECT_EVENT); }
             break;
         case RelPl:
-            applyRelPl();
+            stepStarting(ReasoningListener.Step.FIND_OPTION);
+            try { applyRelPl(); } finally { stepFinished(ReasoningListener.Step.FIND_OPTION); }
             break;
         case ApplPl:
-            applyApplPl();
+            stepStarting(ReasoningListener.Step.FIND_OPTION);
+            try { applyApplPl(); } finally { stepFinished(ReasoningListener.Step.FIND_OPTION); }
             break;
         case SelAppl:
-            applySelAppl();
+            stepStarting(ReasoningListener.Step.FIND_OPTION);
+            try { applySelAppl(); } finally { stepFinished(ReasoningListener.Step.FIND_OPTION); }
             break;
         case FindOp:
-            applyFindOp();
+            stepStarting(ReasoningListener.Step.FIND_OPTION);
+            try { applyFindOp(); } finally { stepFinished(ReasoningListener.Step.FIND_OPTION); }
             break;
         case AddIM:
-            applyAddIM();
+            stepStarting(ReasoningListener.Step.ADD_INTENDED_MEANS);
+            try { applyAddIM(); } finally { stepFinished(ReasoningListener.Step.ADD_INTENDED_MEANS); }
             break;
         default:
             break;
@@ -212,17 +233,21 @@ public class TransitionSystem implements Serializable {
     private void applySemanticRuleAct() throws JasonException {
         switch (stepAct) {
         case ProcAct:
-            applyProcAct();
+            stepStarting(ReasoningListener.Step.PROCESS_ACTIONS);
+            try { applyProcAct(); } finally { stepFinished(ReasoningListener.Step.PROCESS_ACTIONS); }
             break;
         case SelInt:
-            applySelInt();
+            stepStarting(ReasoningListener.Step.SELECT_INTENTION);
+            try { applySelInt(); } finally { stepFinished(ReasoningListener.Step.SELECT_INTENTION); }
             break;
         case ExecInt:
-            applyExecInt();
+            stepStarting(ReasoningListener.Step.EXECUTE_INTENTION);
+            try { applyExecInt(); } finally { stepFinished(ReasoningListener.Step.EXECUTE_INTENTION); }
             break;
         case ClrInt:
             stepAct = State.StartRC;
-            applyClrInt(C.SI);
+            stepStarting(ReasoningListener.Step.CLEAR_INTENTION);
+            try { applyClrInt(C.SI); } finally { stepFinished(ReasoningListener.Step.CLEAR_INTENTION); }
             break;
         default:
             break;
@@ -521,6 +546,8 @@ public class TransitionSystem implements Serializable {
 
     private void applyRelPl() throws JasonException {
         if (C.SE.getOption() == null) { // no option yet
+            ReasoningListener l = reasoningListener;
+            if (l != null) l.planSearchStarting(this, C.SE, ReasoningListener.SearchMethod.RELEVANT_AND_APPLICABLE);
             // get all relevant plans for the selected event
             C.RP = getAg().relevantPlans(C.SE.trigger, C.SE);
 
@@ -659,6 +686,9 @@ public class TransitionSystem implements Serializable {
             plib = getPLForIM(C.SE.getIntention().peek());
         }
 
+        ReasoningListener listener = reasoningListener;
+        if (listener != null) listener.planSearchStarting(this, C.SE, ReasoningListener.SearchMethod.FIRST_FOUND);
+
         String kindOfError = "relevant";
         while (plib != null) {
             // get all relevant plans for the selected event
@@ -699,17 +729,29 @@ public class TransitionSystem implements Serializable {
             }
         }
 
+        ReasoningListener listener = reasoningListener;
         relUn = pl.isRelevant(evt.trigger, relUn);
         if (relUn != null) { // is relevant
             LogicalFormula context = pl.getContext();
             if (context == null) { // context is true
+                if (listener != null) listener.planEvaluated(this, pl, true, true, java.util.Collections.emptyList());
                 return new Option(pl, relUn, evt);
+            } else if (listener != null) {
+                ContextTermTracker tracker = new ContextTermTracker(context);
+                Iterator<Unifier> r = tracker.logicalConsequence(ag, relUn);
+                Option opt = null;
+                if (r != null && r.hasNext())
+                    opt = new Option(pl, r.next(), evt);
+                listener.planEvaluated(this, pl, true, opt != null, tracker.results());
+                return opt;
             } else {
                 Iterator<Unifier> r = context.logicalConsequence(ag, relUn);
                 if (r != null && r.hasNext()) {
                     return new Option(pl, r.next(), evt);
                 }
             }
+        } else if (listener != null) {
+            listener.planEvaluated(this, pl, false, false, java.util.Collections.emptyList());
         }
         return null;
     }
@@ -1664,18 +1706,25 @@ public class TransitionSystem implements Serializable {
     public void sense() {
         try {
             if (logger.isLoggable(Level.FINE)) logger.fine("Start sense");
+            ReasoningListener rl = reasoningListener;
+            if (rl != null) rl.phaseStarting(this, ReasoningListener.Phase.SENSE);
 
             C.resetSense();
 
             if (nrcslbr >= setts.nrcbp()) {
                 nrcslbr = 0;
-                C.syncApPlanSense.lock();
+                stepStarting(ReasoningListener.Step.PERCEIVE);
                 try {
-                    ag.buf(getAgArch().perceive());
+                    C.syncApPlanSense.lock();
+                    try {
+                        ag.buf(getAgArch().perceive());
+                    } finally {
+                        C.syncApPlanSense.unlock();
+                    }
+                    getAgArch().checkMail();
                 } finally {
-                    C.syncApPlanSense.unlock();
+                    stepFinished(ReasoningListener.Step.PERCEIVE);
                 }
-                getAgArch().checkMail();
             }
             nrcslbr++; // counting number of cycles since last belief revision
 
@@ -1706,13 +1755,18 @@ public class TransitionSystem implements Serializable {
     public void deliberate() {
         try {
             C.resetDeliberate();
+            ReasoningListener rl = reasoningListener;
+            if (rl != null) rl.phaseStarting(this, ReasoningListener.Phase.DELIBERATE);
 
             // run tasks allocated to be performed in the beginning of the cycle
             Runnable r = taskForBeginOfCycle.poll();
+            boolean tasksObserved = r != null && reasoningListener != null;
+            if (tasksObserved) stepStarting(ReasoningListener.Step.CYCLE_START_TASKS);
             while (r != null) {
                 r.run(); //It is processed only things related to operations on goals/intentions resumed/suspended/finished It can be placed in the deliberate stage, but the problem is the sleep when the synchronous execution is adopted
                 r = taskForBeginOfCycle.poll();
             }
+            if (tasksObserved) stepFinished(ReasoningListener.Step.CYCLE_START_TASKS);
 
             stepDeliberate = State.SelEv;
             do {
@@ -1728,6 +1782,8 @@ public class TransitionSystem implements Serializable {
     public void act() {
         try {
             C.resetAct();
+            ReasoningListener rl = reasoningListener;
+            if (rl != null) rl.phaseStarting(this, ReasoningListener.Phase.ACT);
 
             stepAct = State.ProcAct;
             do {
