@@ -1,0 +1,3 @@
+MAS counter1 {
+    agents: counter #1;
+}

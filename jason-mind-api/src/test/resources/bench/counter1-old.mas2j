@@ -1,0 +1,3 @@
+MAS counter1old {
+    agents: counter [mindinspector="web(cycle,html,history)"] #1;
+}

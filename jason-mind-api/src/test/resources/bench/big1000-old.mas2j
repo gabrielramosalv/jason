@@ -1,0 +1,3 @@
+MAS big1000old {
+    agents: big1000 [mindinspector="web(cycle,html,history)"] #1;
+}
