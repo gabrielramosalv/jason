@@ -21,6 +21,9 @@ import java.util.Optional;
  */
 public class FindMasUseCase implements FindMasPort {
 
+    /** Number of newest closed cycles looked at to tell whether an agent is active. */
+    static final int ACTIVE_WINDOW = 10;
+
     /** Read-only access to the agents and their cycles. */
     private final HistoryQueryRepositoryPort historyQuery;
 
@@ -51,7 +54,8 @@ public class FindMasUseCase implements FindMasPort {
         for (Agent a : this.historyQuery.agents()) {
             Optional<CycleRecord> last = this.historyQuery.lastClosedCycle(a.getName());
             Optional<CycleRecord> oldest = this.historyQuery.oldestCycle(a.getName());
-            boolean active = last.map(c -> c.sense() || c.deliberate() || c.act()).orElse(false);
+            boolean active = last.isPresent() && this.historyQuery.cycles(a.getName(), last.get().cycle() - ACTIVE_WINDOW + 1,
+                    last.get().cycle()).stream().anyMatch(c -> c.sense() || c.deliberate() || c.act());
             agents.add(
                     new MasOut.AgentItem(a.getName(), active, a.hasEnded(), oldest.map(CycleRecord::cycle).orElse(null),
                             last.map(CycleRecord::cycle).orElse(null)));

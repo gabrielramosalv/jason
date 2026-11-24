@@ -36,7 +36,8 @@ public class MindApiManager extends MindInspectorWeb {
      */
     private static String jasonVersion() {
         try {
-            return Config.get().getJasonVersion();
+            String v = Config.get().getJasonVersion();
+            return v == null || v.startsWith("undefined") ? "unknown" : v;
         } catch (RuntimeException e) {
             return "unknown";
         }

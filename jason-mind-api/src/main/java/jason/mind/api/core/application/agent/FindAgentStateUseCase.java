@@ -1,6 +1,7 @@
 package jason.mind.api.core.application.agent;
 
 import jason.mind.api.core.application.history.EntityIds;
+import jason.mind.api.core.application.history.InstantiatedLabel;
 import jason.mind.api.core.application.history.HistoryView;
 import jason.mind.api.core.application.history.InvalidQueryException;
 import jason.mind.api.core.domain.model.entities.Belief;
@@ -212,7 +213,8 @@ public class FindAgentStateUseCase implements FindAgentStatePort {
             for (int k = 0; k < stack.size(); k++) {
                 IntendedMeans im = stack.get(k);
                 levels.add(
-                        new AgentStateOut.LevelOut(EntityIds.format(im), k == 0 ? "intention" : "subgoal", im.label()));
+                        new AgentStateOut.LevelOut(EntityIds.format(im), k == 0 ? "intention" : "subgoal",
+                                InstantiatedLabel.of(im)));
                 for (TimelineEntry<Integer> en : im.getCurrentDeed().entries()) {
                     if (en.occurrence().sequence() > cut) {
                         break;

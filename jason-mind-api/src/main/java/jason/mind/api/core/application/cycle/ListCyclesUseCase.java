@@ -1,6 +1,7 @@
 package jason.mind.api.core.application.cycle;
 
 import jason.mind.api.core.application.history.HistoryView;
+import jason.mind.api.core.application.history.InvalidQueryException;
 import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.ports.in.cycle.CyclesOut;
 import jason.mind.api.core.ports.in.cycle.ListCyclesIn;
@@ -20,6 +21,9 @@ import java.util.List;
  */
 @RequiredArgsConstructor
 public class ListCyclesUseCase implements ListCyclesPort {
+
+    /** Largest number of cycles in one response; a wider range keeps the newest ones. */
+    static final int MAX_CYCLES = 5000;
 
     /** Read-only access to the cycle records. */
     private final HistoryQueryRepositoryPort historyQuery;
@@ -44,8 +48,14 @@ public class ListCyclesUseCase implements ListCyclesPort {
         if (oldest == null || newest == null) {
             return new CyclesOut(in.agent(), null, null, null, null, List.of());
         }
+        if (in.from() != null && in.to() != null && in.from() > in.to()) {
+            throw new InvalidQueryException("from " + in.from() + " is after to " + in.to());
+        }
         int from = clamp(in.from() == null ? oldest.cycle() : in.from(), oldest.cycle(), newest.cycle());
         int to = clamp(in.to() == null ? newest.cycle() : in.to(), oldest.cycle(), newest.cycle());
+        if ((long) to - from + 1 > MAX_CYCLES) {
+            from = to - MAX_CYCLES + 1;
+        }
         List<CyclesOut.CycleItem> items = new ArrayList<>();
         if (from <= to) {
             List<CycleRecord> records = this.historyQuery.cycles(in.agent(), from, to);

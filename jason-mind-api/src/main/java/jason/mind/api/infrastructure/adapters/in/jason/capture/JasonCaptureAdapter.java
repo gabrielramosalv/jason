@@ -1149,9 +1149,11 @@ public final class JasonCaptureAdapter implements ReasoningListener {
                 continue;
             }
             Unifier u = im.getUnif();
+            boolean seed = !tim.seeded;
+            tim.seeded = true;
             for (VarTerm v : u) {
                 String name = v.toString();
-                if (name.startsWith("_")) {
+                if (name.startsWith("_") && !seed) {
                     continue;
                 }
                 Term value = u.get(v);
@@ -1638,5 +1640,8 @@ public final class JasonCaptureAdapter implements ReasoningListener {
 
         /** Text of each variable binding already recorded, indexed by variable name. */
         final Map<String, String> bindings = new HashMap<>();
+
+        /** Whether the first pass over the unifier, which also records the renamed variables, already ran. */
+        boolean seeded;
     }
 }

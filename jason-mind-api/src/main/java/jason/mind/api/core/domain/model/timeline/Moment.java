@@ -84,6 +84,14 @@ public record Moment(AgentCycle agentCycle, int iteration, ReasoningStep step, i
         return this.step.getPhase();
     }
 
+    /**
+     * Orders moments by cycle, iteration, step and ordinal. This is a grouping order, not the order of the facts: an
+     * {@link ReasoningStep#OUT_OF_CYCLE} effect that another thread queued in the middle of a cycle sorts after steps
+     * it really came before. The total order inside an agent is the {@code sequence} of the occurrence.
+     *
+     * @param o moment to compare with
+     * @return negative, zero or positive as this moment is grouped before, with or after the other
+     */
     @Override
     public int compareTo(Moment o) {
         if (!this.agent().equals(o.agent())) {
