@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.LongAdder;
 
 import jason.asSyntax.LogExpr;
 import jason.asSyntax.LogicalFormula;
@@ -13,6 +14,12 @@ import jason.asSyntax.Term;
 import jason.asSyntax.VarTerm;
 
 public final class ContextTermTracker {
+
+    /** switch for benchmark timing: set to true to measure the time spent building the text of the bindings */
+    private static final boolean TIMING = false;
+
+    /** total time spent building the text of the bindings, in nanoseconds, when TIMING is on */
+    private static final LongAdder BINDINGS_NANOSECONDS = new LongAdder();
 
     private final List<LogicalFormula> terms;
     private final int[] attempts;
@@ -98,7 +105,13 @@ public final class ContextTermTracker {
                     Unifier u = it.next();
                     if (first) {
                         first = false;
-                        bindings.set(index, bindingsOf(term, u));
+                        if (TIMING) {
+                            long t0 = System.nanoTime();
+                            bindings.set(index, bindingsOf(term, u));
+                            BINDINGS_NANOSECONDS.add(System.nanoTime() - t0);
+                        } else {
+                            bindings.set(index, bindingsOf(term, u));
+                        }
                     }
                     return u;
                 }
