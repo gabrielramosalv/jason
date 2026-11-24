@@ -9,6 +9,7 @@ import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.domain.model.timeline.CollectionTimeline;
 import jason.mind.api.core.domain.model.timeline.Entity;
+import jason.mind.api.core.domain.service.history.HistoryFootprintEstimator;
 import jason.mind.api.core.ports.out.history.Footprint;
 import jason.mind.api.core.domain.model.timeline.Occurrence;
 import jason.mind.api.core.domain.model.timeline.Timeline;
@@ -77,6 +78,21 @@ final class AgentStore {
         this.messagePruned = messagePruned;
     }
 
+    /** Count taken by the agent thread for the budget, or {@code null} when a new count is due. */
+    private Footprint budgetCount;
+
+    /** Newest closed cycle when {@link #budgetCount} was taken. */
+    private int budgetCountCycle;
+
+    /** Cycles the count covered. */
+    private int budgetCountRetained;
+
+    /** Estimated bytes of the count. */
+    private long budgetCountBytes;
+
+    /** Cycle from which a new count is due. */
+    private int budgetNextCountCycle;
+
     /** How long a count of the footprint is reused, in nanoseconds. */
     private static final long FOOTPRINT_TTL_NANOS = 5_000_000_000L;
 
@@ -91,6 +107,51 @@ final class AgentStore {
         if (this.footprintAt != 0 && now - this.footprintAt < FOOTPRINT_TTL_NANOS) {
             return this.footprint;
         }
+        Footprint counted = count();
+        this.footprint = counted;
+        this.footprintAt = now;
+        return this.footprint;
+    }
+
+    /**
+     * Finds the oldest cycle to keep so that this store stays within its share of the budget. Called by the thread of
+     * the agent at the end of each cycle: it recounts only every twentieth of the retained cycles and, between counts,
+     * projects the growth from the bytes per cycle of the last count.
+     *
+     * @param shareBytes bytes this store may use
+     * @return the oldest cycle to keep, or {@code 0} when the store fits
+     */
+    int horizonForBudget(long shareBytes) {
+        CycleRecord last = this.lastClosed;
+        if (last == null || this.cycles.isEmpty()) {
+            return 0;
+        }
+        int newest = last.cycle();
+        int oldest = this.cycles.firstKey();
+        if (this.budgetCount == null || newest >= this.budgetNextCountCycle) {
+            this.budgetCount = count();
+            this.budgetCountCycle = newest;
+            this.budgetCountRetained = Math.max(1, newest - oldest + 1);
+            this.budgetCountBytes = HistoryFootprintEstimator.bytes(this.budgetCount);
+            this.budgetNextCountCycle = newest + Math.max(50, this.budgetCountRetained / 20);
+        }
+        double perCycle = (double) this.budgetCountBytes / this.budgetCountRetained;
+        long projected = this.budgetCountBytes + (long) ((newest - this.budgetCountCycle) * perCycle);
+        int retained = newest - oldest + 1;
+        int horizon = HistoryFootprintEstimator.horizonFor(projected, Math.max(retained, this.budgetCountRetained), oldest,
+                newest, shareBytes);
+        if (horizon > 0) {
+            this.budgetCount = null;
+        }
+        return horizon;
+    }
+
+    /**
+     * Counts the entities, the timeline entries and the caused occurrences held, without any cache.
+     *
+     * @return the count
+     */
+    private Footprint count() {
         long entries = 0;
         long effects = 0;
         long count = 0;
@@ -106,9 +167,7 @@ final class AgentStore {
                 effects += m.getEffects().size();
             }
         }
-        this.footprint = new Footprint(count, entries, effects);
-        this.footprintAt = now;
-        return this.footprint;
+        return new Footprint(count, entries, effects);
     }
 
     /**

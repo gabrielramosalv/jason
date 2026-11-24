@@ -14,6 +14,9 @@ public class SettingsRepositoryAdapter implements SettingsRepositoryPort {
     /** System property that holds the initial retention of cycles. */
     public static final String RETENTION_PROPERTY = "mind.retentionCycles";
 
+    /** Name of the system property that sets the memory budget in bytes, or {@code unlimited}. */
+    public static final String BUDGET_PROPERTY = "mind.memoryBudgetBytes";
+
     /** Current settings. */
     private volatile Settings settings;
 
@@ -33,7 +36,22 @@ public class SettingsRepositoryAdapter implements SettingsRepositoryPort {
         if (initial < Settings.MINIMUM_RETENTION || initial > Settings.MAXIMUM_RETENTION) {
             initial = Settings.DEFAULT_RETENTION;
         }
-        this.settings = new Settings(initial);
+        long budget = Settings.defaultBudget(Runtime.getRuntime().maxMemory());
+        String b = System.getProperty(BUDGET_PROPERTY);
+        if (b != null) {
+            if (b.trim().equalsIgnoreCase("unlimited")) {
+                budget = Settings.UNLIMITED;
+            } else {
+                try {
+                    long v = Long.parseLong(b.trim());
+                    if (v >= Settings.MINIMUM_BUDGET) {
+                        budget = v;
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        this.settings = new Settings(initial, budget);
     }
 
     @Override

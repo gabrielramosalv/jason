@@ -4,6 +4,7 @@ import jason.mind.api.core.application.history.EntityIds;
 import jason.mind.api.core.application.history.HistoryView;
 import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
+import jason.mind.api.core.domain.model.settings.Settings;
 import jason.mind.api.core.domain.model.timeline.Entity;
 import jason.mind.api.core.ports.in.settings.SettingsOut;
 import jason.mind.api.core.ports.out.history.HistoryQueryRepositoryPort;
@@ -35,17 +36,17 @@ final class LiveBeyondHorizon {
      * the horizon, together with the oldest of them.
      *
      * @param query     read-only access to the history
-     * @param retention number of cycles retained
+     * @param settings  settings that tell how many cycles each agent retains
      * @return one entry per agent that has such entities
      */
-    static List<SettingsOut.LiveBeyondHorizon> compute(HistoryQueryRepositoryPort query, int retention) {
+    static List<SettingsOut.LiveBeyondHorizon> compute(HistoryQueryRepositoryPort query, Settings settings) {
         List<SettingsOut.LiveBeyondHorizon> r = new ArrayList<>();
         for (Agent a : query.agents()) {
             CycleRecord last = query.lastClosedCycle(a.getName()).orElse(null);
             if (last == null) {
                 continue;
             }
-            int horizon = last.cycle() - retention + 1;
+            int horizon = last.cycle() - settings.retentionFor(a.getName()) + 1;
             if (horizon <= 0) {
                 continue;
             }

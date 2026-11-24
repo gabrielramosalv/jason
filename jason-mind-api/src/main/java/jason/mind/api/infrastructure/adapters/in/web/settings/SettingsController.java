@@ -53,10 +53,12 @@ public class SettingsController {
             } catch (RuntimeException e) {
                 throw new WebExchange.BadParameterException("invalid body: expected {\"retentionCycles\": n}");
             }
-            if (body == null || body.retentionCycles == null) {
-                throw new WebExchange.BadParameterException("invalid body: expected {\"retentionCycles\": n}");
+            if (body == null || body.retentionCycles == null && body.memoryBudgetBytes == null) {
+                throw new WebExchange.BadParameterException(
+                        "invalid body: expected {\"retentionCycles\": n} or {\"memoryBudgetBytes\": n}");
             }
-            return Responses.ok(this.updateSettings.execute(new UpdateSettingsIn(body.retentionCycles)));
+            return Responses.ok(this.updateSettings.execute(
+                    new UpdateSettingsIn(body.retentionCycles, body.memoryBudgetBytes)));
         });
     }
 
@@ -68,6 +70,9 @@ public class SettingsController {
 
         /** Number of cycles to retain in the history. */
         public Long retentionCycles;
+
+        /** Bytes the history of all agents together may use. */
+        public Long memoryBudgetBytes;
 
         /**
          * Creates an empty request body to be filled by deserialization.

@@ -1,5 +1,6 @@
 package jason.mind.api.core.application.settings;
 
+import jason.mind.api.core.domain.model.settings.Settings;
 import jason.mind.api.core.ports.in.settings.FindSettingsPort;
 import jason.mind.api.core.ports.in.settings.SettingsOut;
 import jason.mind.api.core.ports.out.history.HistoryQueryRepositoryPort;
@@ -23,7 +24,6 @@ public class FindSettingsUseCase implements FindSettingsPort {
 
     @Override
     public SettingsOut execute() {
-        int retention = this.settingsRepository.load().retentionCycles();
-        return new SettingsOut(retention, null, LiveBeyondHorizon.compute(this.historyQuery, retention));
+        return SettingsView.of(this.settingsRepository.load(), this.historyQuery, null);
     }
 }

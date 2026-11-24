@@ -27,12 +27,20 @@ public class UpdateSettingsUseCase implements UpdateSettingsPort {
     @Override
     public SettingsOut execute(UpdateSettingsIn in) {
         Long n = in.retentionCycles();
-        if (n == null || n < Settings.MINIMUM_RETENTION || n > Settings.MAXIMUM_RETENTION) {
+        Long budget = in.memoryBudgetBytes();
+        if (n == null && budget == null) {
+            throw new InvalidSettingsException("retentionCycles or memoryBudgetBytes is required");
+        }
+        if (n != null && (n < Settings.MINIMUM_RETENTION || n > Settings.MAXIMUM_RETENTION)) {
             throw new InvalidSettingsException("retentionCycles must be between 1 and 10000000");
         }
-        Settings s = new Settings(n.intValue());
+        if (budget != null && budget < Settings.MINIMUM_BUDGET) {
+            throw new InvalidSettingsException("memoryBudgetBytes must be at least 1048576");
+        }
+        Settings current = this.settingsRepository.load();
+        Settings s = new Settings(n == null ? current.retentionCycles() : n.intValue(),
+                budget == null ? current.memoryBudgetBytes() : budget, current.agentRetention());
         this.settingsRepository.save(s);
-        return new SettingsOut(s.retentionCycles(), "nextCycleClose",
-                LiveBeyondHorizon.compute(this.historyQuery, s.retentionCycles()));
+        return SettingsView.of(s, this.historyQuery, "nextCycleClose");
     }
 }

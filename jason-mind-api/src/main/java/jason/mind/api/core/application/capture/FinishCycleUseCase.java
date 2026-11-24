@@ -1,6 +1,7 @@
 package jason.mind.api.core.application.capture;
 
 import jason.mind.api.core.domain.model.history.CycleRecord;
+import jason.mind.api.core.domain.model.settings.Settings;
 import jason.mind.api.core.ports.in.capture.FinishCycleIn;
 import jason.mind.api.core.ports.in.capture.FinishCyclePort;
 import jason.mind.api.core.ports.out.clock.ClockProviderPort;
@@ -74,8 +75,11 @@ public class FinishCycleUseCase implements FinishCyclePort {
         if (in.captureNanos() > 0) {
             this.captureTime.record(in.agent(), in.captureNanos());
         }
-        long byRetention = in.cycle() - this.settingsRepository.load().retentionCycles() + 1;
-        int horizon = (int) Math.max(Math.max(byRetention, this.historyRepository.takePrune(in.agent())), 0);
+        Settings settings = this.settingsRepository.load();
+        long byRetention = in.cycle() - settings.retentionFor(in.agent()) + 1;
+        long requested = Math.max(byRetention, this.historyRepository.takePrune(in.agent()));
+        int horizon = (int) Math.max(Math.max(requested,
+                this.historyRepository.horizonForBudget(in.agent(), settings.memoryBudgetBytes())), 0);
         if (horizon > 0) {
             this.historyRepository.prune(in.agent(), horizon);
             this.consoleRepository.pruneBefore(in.agent(), horizon);

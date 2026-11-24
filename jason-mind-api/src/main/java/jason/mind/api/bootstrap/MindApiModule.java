@@ -2,6 +2,8 @@ package jason.mind.api.bootstrap;
 
 import jason.mind.api.core.application.metrics.FindMetricsUseCase;
 import jason.mind.api.core.application.prune.RequestPruneUseCase;
+import jason.mind.api.core.application.settings.UpdateAgentSettingsUseCase;
+import jason.mind.api.infrastructure.adapters.in.web.settings.AgentSettingsController;
 import jason.mind.api.core.ports.in.prune.RequestPrunePort;
 import jason.mind.api.core.ports.out.metrics.CaptureTimeRepositoryPort;
 import jason.mind.api.core.ports.out.metrics.RuntimeMemoryPort;
@@ -143,7 +145,8 @@ public record MindApiModule(List<Object> controllers, JasonCaptureRegistry captu
                 new SettingsController(new FindSettingsUseCase(settings, historyQuery),
                         new UpdateSettingsUseCase(settings, historyQuery)),
                 new MetricsController(new FindMetricsUseCase(historyQuery, captureTime, runtimeMemory)),
-                new PruneController(prune), new AgentPruneController(prune));
+                new PruneController(prune), new AgentPruneController(prune),
+                new AgentSettingsController(new UpdateAgentSettingsUseCase(settings, historyQuery)));
         return new MindApiModule(controllers, captureRegistry);
     }
 

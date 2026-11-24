@@ -122,6 +122,15 @@ public class HistoryRepositoryAdapter implements HistoryRepositoryPort {
     }
 
     @Override
+    public int horizonForBudget(String agentName, long budgetBytes) {
+        AgentStore s = this.memory.findStore(agentName);
+        if (s == null || budgetBytes == Long.MAX_VALUE) {
+            return 0;
+        }
+        return s.horizonForBudget(budgetBytes / Math.max(1, this.memory.stores.size()));
+    }
+
+    @Override
     public void prune(String agentName, int oldestCycle) {
         AgentStore s = requireStore(agentName);
         s.prune(oldestCycle);

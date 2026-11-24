@@ -5,7 +5,11 @@ import jason.mind.api.core.application.history.AgentNotFoundException;
 import jason.mind.api.core.application.history.InvalidQueryException;
 import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.AgentConfig;
+import jason.mind.api.core.domain.model.entities.Message;
+import jason.mind.api.core.domain.model.entities.Performative;
+import jason.mind.api.core.domain.model.entities.SendMode;
 import jason.mind.api.core.domain.model.history.CycleRecord;
+import jason.mind.api.core.domain.model.settings.Settings;
 import jason.mind.api.core.domain.model.timeline.Moment;
 import jason.mind.api.core.domain.model.timeline.Occurrence;
 import jason.mind.api.core.domain.model.timeline.ReasoningStep;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RequestPruneUseCaseTest {
 
@@ -98,5 +103,30 @@ class RequestPruneUseCaseTest {
     void theCaptureTimeOfTheCycleIsRecorded() {
         this.finish.execute(new FinishCycleIn("bob", 31, true, false, false, 2_000));
         assertEquals(2_000.0, this.captureTime.meanNanos("bob").getAsDouble());
+    }
+
+    @Test
+    void anOverBudgetHistoryIsPrunedAtTheEndOfTheCycleWithoutAnyRequest() {
+        for (long id = 1; id <= 3_000; id++) {
+            this.repo.appendEntity("bob", new Message(id, new Occurrence(Moment.of("bob", 1, 0, ReasoningStep.PERCEIVE, 1), id + 1, null),
+                    1, SendMode.ASYNCHRONOUS, null, null, "alice", Performative.TELL, "hi"));
+        }
+        SettingsRepositoryAdapter small = new SettingsRepositoryAdapter();
+        small.save(new Settings(10_000, Settings.MINIMUM_BUDGET));
+        FinishCycleUseCase tight = new FinishCycleUseCase(this.repo, new ClockProviderAdapter(), new SequenceProviderAdapter(),
+                new ConsoleRepositoryAdapter(), small, this.captureTime);
+        assertEquals(1, this.query.oldestCycle("bob").orElseThrow().cycle());
+        for (int c = 31; c <= 100; c++) {
+            tight.execute(new FinishCycleIn("bob", c, true, false, false, 0));
+        }
+        assertTrue(this.query.oldestCycle("bob").orElseThrow().cycle() > 1);
+    }
+
+    @Test
+    void aHistoryThatFitsTheBudgetIsNotPruned() {
+        FinishCycleUseCase roomy = new FinishCycleUseCase(this.repo, new ClockProviderAdapter(), new SequenceProviderAdapter(),
+                new ConsoleRepositoryAdapter(), new SettingsRepositoryAdapter(), this.captureTime);
+        roomy.execute(new FinishCycleIn("bob", 31, true, false, false, 0));
+        assertEquals(1, this.query.oldestCycle("bob").orElseThrow().cycle());
     }
 }

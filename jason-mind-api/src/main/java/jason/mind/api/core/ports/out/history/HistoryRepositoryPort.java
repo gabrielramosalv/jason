@@ -104,4 +104,14 @@ public interface HistoryRepositoryPort {
      * @return oldest cycle to keep, or {@code 0} when nothing was requested
      */
     int takePrune(String agentName);
+
+    /**
+     * Finds the oldest cycle to keep so that the history of an agent stays within its share of a memory budget. The
+     * budget is shared equally by the agents that have a history.
+     *
+     * @param agentName   name of the agent
+     * @param budgetBytes bytes the history of all agents together may use
+     * @return the oldest cycle to keep, or {@code 0} when the history fits
+     */
+    int horizonForBudget(String agentName, long budgetBytes);
 }
