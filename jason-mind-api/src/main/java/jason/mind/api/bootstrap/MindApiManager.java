@@ -1,5 +1,7 @@
 package jason.mind.api.bootstrap;
 
+import jason.mind.api.infrastructure.adapters.in.web.TimedJsonConverter;
+import jason.mind.api.infrastructure.metrics.MindTiming;
 import jason.architecture.MindInspectorWeb;
 import jason.asSemantics.Agent;
 import jason.infra.local.BaseLocalMAS;
@@ -10,15 +12,28 @@ import org.w3c.dom.Document;
 
 import java.util.logging.Logger;
 
+/**
+ * Mind inspector that serves the Mind API over HTTP.
+ * Starts and stops the HTTP server with the API controllers and forwards agent registration to the capture registry.
+ *
+ * @author Gabriel Lima
+ */
 public class MindApiManager extends MindInspectorWeb {
 
+    /** Logger for the server startup. */
     private static final Logger LOGGER = Logger.getLogger("Mind");
 
-    private final MindApiModule module = new MindApiModule(jasonVersion(), MindApiManager::masName);
+    /** Wiring of the Mind API components. */
+    private final MindApiModule module = MindApiModule.create(jasonVersion(), MindApiManager::masName);
 
+    /** Running HTTP application, or {@code null} before the server starts. */
     private PeelApp app;
 
-
+    /**
+     * Reads the version of Jason from its configuration.
+     *
+     * @return version of Jason, or {@code "unknown"} when it cannot be read
+     */
     private static String jasonVersion() {
         try {
             return Config.get().getJasonVersion();
@@ -27,6 +42,11 @@ public class MindApiManager extends MindInspectorWeb {
         }
     }
 
+    /**
+     * Reads the name of the running multi-agent system from the local runner.
+     *
+     * @return name of the multi-agent system, or {@code null} when there is no runner or project
+     */
     private static String masName() {
         try {
             BaseLocalMAS runner = BaseLocalMAS.getRunner();
@@ -39,28 +59,37 @@ public class MindApiManager extends MindInspectorWeb {
     @Override
     public String startHttpServer() {
         int port = super.httpServerPort;
+        TimedJsonConverter.install();
         this.app = PeelAppBuilder.run(builder -> {
             builder.port(port).host(System.getProperty("mind.host", "127.0.0.1"));
-            for (Object c : module.controllers()) builder.addController(c);
+            if (MindTiming.TIMING) {
+                builder.requestObserver((method, path, status, startNanos, endNanos) ->
+                        MindTiming.addRequest(endNanos - startNanos));
+            }
+            for (Object c : this.module.controllers()) {
+                builder.addController(c);
+            }
         });
         this.app.start();
-        LOGGER.info("Mind API v2 at http://127.0.0.1:" + port + "/api/mas");
+        LOGGER.info("Mind API at http://127.0.0.1:" + port + "/api/mas");
         return "";
     }
 
     @Override
     public void stoptHttpServer() {
-        if (this.app != null) this.app.stop();
+        if (this.app != null) {
+            this.app.stop();
+        }
     }
 
     @Override
     public void registerAg(Agent agent) {
-        module.captureRegistry().register(agent);
+        this.module.captureRegistry().register(agent);
     }
 
     @Override
     public void removeAg(Agent agent) {
-        module.captureRegistry().remove(agent);
+        this.module.captureRegistry().remove(agent);
     }
 
     @Override

@@ -6,25 +6,32 @@ import jason.mind.api.core.ports.in.capture.RecordConsoleLinePort;
 import jason.mind.api.core.ports.out.clock.ClockProviderPort;
 import jason.mind.api.core.ports.out.console.ConsoleRepositoryPort;
 import jason.mind.api.core.ports.out.sequence.SequenceProviderPort;
+import lombok.RequiredArgsConstructor;
 
+/**
+ * Use case that records a line printed to the console by an agent.
+ * The sequence number and the append happen under the repository lock, so lines are stored in sequence order.
+ *
+ * @author Gabriel Lima
+ */
+@RequiredArgsConstructor
 public class RecordConsoleLineUseCase implements RecordConsoleLinePort {
 
+    /** Repository where the console lines are appended. */
     private final ConsoleRepositoryPort consoleRepository;
-    private final ClockProviderPort clockProvider;
-    private final SequenceProviderPort sequenceProvider;
 
-    public RecordConsoleLineUseCase(ConsoleRepositoryPort consoleRepository, ClockProviderPort clockProvider,
-                                    SequenceProviderPort sequenceProvider) {
-        this.consoleRepository = consoleRepository;
-        this.clockProvider = clockProvider;
-        this.sequenceProvider = sequenceProvider;
-    }
+    /** Source of the wall-clock time stamped on each line. */
+    private final ClockProviderPort clockProvider;
+
+    /** Source of the sequence number of each line. */
+    private final SequenceProviderPort sequenceProvider;
 
     @Override
     public void execute(RecordConsoleLineIn in) {
-        synchronized (consoleRepository) {
-            consoleRepository.append(new ConsoleLine(in.agent(), in.cycle(), sequenceProvider.next(in.agent()),
-                    clockProvider.nowMilliseconds(), in.text()));
+        synchronized (this.consoleRepository) {
+            this.consoleRepository.append(
+                    new ConsoleLine(in.agent(), in.cycle(), this.sequenceProvider.next(in.agent()),
+                            this.clockProvider.nowMilliseconds(), in.text()));
         }
     }
 }

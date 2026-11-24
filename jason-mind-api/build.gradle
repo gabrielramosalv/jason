@@ -25,7 +25,12 @@ repositories {
 dependencies {
     api project(':jason-interpreter')
 
-    implementation 'com.github.gabrielramosalv.peel-web:peel-web-core:v1.1.1'
+    implementation 'com.github.gabrielramosalv.peel-web:peel-web-core:v1.2.0'
+
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+    testCompileOnly 'org.projectlombok:lombok:1.18.36'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.36'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
@@ -45,6 +50,13 @@ publishing {
             artifactId = 'jason-mind-api'
             from components.java
         }
+    }
+}
+
+processResources {
+    inputs.property "mindApiVersion", mindApiVersion
+    filesMatching("jason/mind/api/mind-api.properties") {
+        expand(mindApiVersion: mindApiVersion)
     }
 }
 

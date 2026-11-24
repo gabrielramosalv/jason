@@ -1,44 +1,38 @@
 package jason.mind.api.core.application.source;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-
 import jason.mind.api.core.application.history.HistoryView;
-import jason.mind.api.core.domain.model.entities.Plan;
 import jason.mind.api.core.domain.model.program.SourceFile;
-import jason.mind.api.core.domain.model.timeline.Entity;
 import jason.mind.api.core.ports.in.source.FindSourcesIn;
 import jason.mind.api.core.ports.in.source.FindSourcesPort;
 import jason.mind.api.core.ports.in.source.SourcesOut;
 import jason.mind.api.core.ports.out.history.HistoryQueryRepositoryPort;
 import jason.mind.api.core.ports.out.source.SourceRepositoryPort;
+import lombok.RequiredArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Use case that lists the source files registered for an agent, in registration order.
+ *
+ * @author Gabriel Lima
+ */
+@RequiredArgsConstructor
 public class FindSourcesUseCase implements FindSourcesPort {
 
+    /** Repository that holds the registered source files. */
     private final SourceRepositoryPort sourceRepository;
-    private final HistoryQueryRepositoryPort historyQuery;
 
-    public FindSourcesUseCase(SourceRepositoryPort sourceRepository, HistoryQueryRepositoryPort historyQuery) {
-        this.sourceRepository = sourceRepository;
-        this.historyQuery = historyQuery;
-    }
+    /** Read-only access to the history, used to check that the agent exists. */
+    private final HistoryQueryRepositoryPort historyQuery;
 
     @Override
     public SourcesOut execute(FindSourcesIn in) {
-        HistoryView.agent(historyQuery, in.agent());
-        long cut = HistoryView.lastCut(historyQuery, in.agent());
-        Set<SourceFile> cited = new LinkedHashSet<>();
-        for (Entity<?> e : historyQuery.entitiesOfTypes(in.agent(), Set.of("plan"))) {
-            Plan p = (Plan) e;
-            if (p.getStart().sequence() > cut || p.getSource() == null || p.getSource().file() == null) continue;
-            cited.add(p.getSource().file());
-        }
+        HistoryView.agent(this.historyQuery, in.agent());
         List<SourcesOut.FileOut> files = new ArrayList<>();
-        for (SourceFile f : sourceRepository.sourcesOf(in.agent()))
-            if (cited.remove(f)) files.add(new SourcesOut.FileOut(f.fileName(), f.content()));
-        for (SourceFile f : cited) files.add(new SourcesOut.FileOut(f.fileName(), f.content()));
+        for (SourceFile f : this.sourceRepository.sourcesOf(in.agent())) {
+            files.add(new SourcesOut.FileOut(f.fileName(), f.content()));
+        }
         return new SourcesOut(in.agent(), files);
     }
 }
