@@ -1,5 +1,15 @@
 package jason.mind.api.bootstrap;
 
+import jason.mind.api.core.application.metrics.FindMetricsUseCase;
+import jason.mind.api.core.application.prune.RequestPruneUseCase;
+import jason.mind.api.core.ports.in.prune.RequestPrunePort;
+import jason.mind.api.core.ports.out.metrics.CaptureTimeRepositoryPort;
+import jason.mind.api.core.ports.out.metrics.RuntimeMemoryPort;
+import jason.mind.api.infrastructure.adapters.in.web.metrics.MetricsController;
+import jason.mind.api.infrastructure.adapters.in.web.prune.AgentPruneController;
+import jason.mind.api.infrastructure.adapters.in.web.prune.PruneController;
+import jason.mind.api.infrastructure.adapters.out.metrics.CaptureTimeRepositoryAdapter;
+import jason.mind.api.infrastructure.adapters.out.metrics.RuntimeMemoryAdapter;
 import jason.mind.api.core.application.agent.FindAgentStateUseCase;
 import jason.mind.api.core.application.capture.EndAgentUseCase;
 import jason.mind.api.core.application.capture.FinishCycleUseCase;
@@ -101,17 +111,20 @@ public record MindApiModule(List<Object> controllers, JasonCaptureRegistry captu
         ConsoleRepositoryPort console = new ConsoleRepositoryAdapter();
         MasRepositoryPort mas = new MasRepositoryAdapter();
         SettingsRepositoryPort settings = new SettingsRepositoryAdapter();
+        CaptureTimeRepositoryPort captureTime = new CaptureTimeRepositoryAdapter();
+        RuntimeMemoryPort runtimeMemory = new RuntimeMemoryAdapter();
         SourceRepositoryPort sources = new SourceRepositoryAdapter();
         ClockProviderPort clock = new ClockProviderAdapter();
         SequenceProviderPort sequence = new SequenceProviderAdapter();
         EntityIdProviderPort entityIds = new EntityIdProviderAdapter();
         QueueDomainService queue = new QueueDomainService();
+        RequestPrunePort prune = new RequestPruneUseCase(history, historyQuery);
 
         CapturePorts capture = TimedCapturePorts.wrap(new CapturePorts(new StartMasUseCase(mas), new StartAgentUseCase(history, sequence),
                 new EndAgentUseCase(history, sequence), new LoadSourcesUseCase(sources),
                 new RecordOccurrenceUseCase(history, sequence, entityIds, new HistoryRecorderDomainService()),
                 new RecordPlanSelectionUseCase(history, sequence),
-                new FinishCycleUseCase(history, clock, sequence, console, settings),
+                new FinishCycleUseCase(history, clock, sequence, console, settings, captureTime),
                 new RecordConsoleLineUseCase(console, clock, sequence)));
         JasonCaptureRegistry captureRegistry = new JasonCaptureRegistry(capture, masName);
         memory.onMessagePruned(captureRegistry::forgetMessage);
@@ -128,7 +141,9 @@ public record MindApiModule(List<Object> controllers, JasonCaptureRegistry captu
                 new SearchController(new SearchEntitiesUseCase(historyQuery),
                         new SearchDeedExecutionsUseCase(historyQuery)),
                 new SettingsController(new FindSettingsUseCase(settings, historyQuery),
-                        new UpdateSettingsUseCase(settings, historyQuery)));
+                        new UpdateSettingsUseCase(settings, historyQuery)),
+                new MetricsController(new FindMetricsUseCase(historyQuery, captureTime, runtimeMemory)),
+                new PruneController(prune), new AgentPruneController(prune));
         return new MindApiModule(controllers, captureRegistry);
     }
 

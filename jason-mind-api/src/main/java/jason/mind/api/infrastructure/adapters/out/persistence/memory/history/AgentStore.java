@@ -9,6 +9,7 @@ import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.domain.model.timeline.CollectionTimeline;
 import jason.mind.api.core.domain.model.timeline.Entity;
+import jason.mind.api.core.ports.out.history.Footprint;
 import jason.mind.api.core.domain.model.timeline.Occurrence;
 import jason.mind.api.core.domain.model.timeline.Timeline;
 
@@ -38,6 +39,15 @@ final class AgentStore {
     /** Closed cycles, by cycle number. */
     final ConcurrentSkipListMap<Integer, CycleRecord> cycles = new ConcurrentSkipListMap<>();
 
+    /** Oldest cycle to keep asked for by a manual prune and not applied yet; 0 when nothing is pending. */
+    final java.util.concurrent.atomic.AtomicInteger pendingPrune = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Last count of what the store holds; renewed after {@link #FOOTPRINT_TTL_NANOS}. */
+    private volatile Footprint footprint = new Footprint(0, 0, 0);
+
+    /** {@link System#nanoTime()} of the last count, or 0 when none was made. */
+    private volatile long footprintAt;
+
     /** Ids of the entities removed by pruning; guarded by its own monitor. */
     private final BitSet pruned = new BitSet();
 
@@ -65,6 +75,57 @@ final class AgentStore {
     AgentStore(Agent agent, LongConsumer messagePruned) {
         this.agent = agent;
         this.messagePruned = messagePruned;
+    }
+
+    /** How long a count of the footprint is reused, in nanoseconds. */
+    private static final long FOOTPRINT_TTL_NANOS = 5_000_000_000L;
+
+    /**
+     * Counts the entities, the timeline entries and the caused occurrences held, reusing a count made in the last few
+     * seconds because walking every entity of a long history is not free.
+     *
+     * @return the count
+     */
+    Footprint footprint() {
+        long now = System.nanoTime();
+        if (this.footprintAt != 0 && now - this.footprintAt < FOOTPRINT_TTL_NANOS) {
+            return this.footprint;
+        }
+        long entries = 0;
+        long effects = 0;
+        long count = 0;
+        for (Entity e : this.entities.values()) {
+            count++;
+            entries += entriesOf(e);
+            effects += e.getEffects().size();
+        }
+        for (Message m : this.incoming.values()) {
+            if (this.entities.get(m.getId()) != m) {
+                count++;
+                entries += entriesOf(m);
+                effects += m.getEffects().size();
+            }
+        }
+        this.footprint = new Footprint(count, entries, effects);
+        this.footprintAt = now;
+        return this.footprint;
+    }
+
+    /**
+     * Counts the entries of every timeline and collection timeline of an entity.
+     *
+     * @param e entity to count
+     * @return number of entries
+     */
+    private static long entriesOf(Entity e) {
+        long n = 0;
+        for (Timeline<?> t : e.timelines().values()) {
+            n += t.entries().size();
+        }
+        for (CollectionTimeline<?> c : e.collections().values()) {
+            n += c.operations().size();
+        }
+        return n;
     }
 
     /**

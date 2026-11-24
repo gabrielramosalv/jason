@@ -127,7 +127,8 @@ public final class JasonCaptureRegistry {
         }
         JasonCaptureAdapter adapter = new JasonCaptureAdapter(this.ports, this.directory, this.sourceFiles, ag, name);
         this.adapters.put(ag, adapter);
-        ag.getTS().setReasoningListener(MindTiming.TIMING ? new TimedReasoningListener(adapter, name) : adapter);
+        ag.getTS().setReasoningListener(
+                new MeteredReasoningListener(adapter, MindTiming.TIMING ? new TimedReasoningListener(adapter, name) : adapter));
         AgentConsoleHandler handler = new AgentConsoleHandler(adapter);
         this.handlers.put(ag, handler);
         ag.getTS().getLogger().addHandler(handler);

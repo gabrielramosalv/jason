@@ -87,4 +87,21 @@ public interface HistoryRepositoryPort {
      * @param oldestCycle oldest cycle kept
      */
     void prune(String agentName, int oldestCycle);
+
+    /**
+     * Asks that the history of an agent be pruned before a cycle at the end of its next cycle. Asking again keeps
+     * the largest request.
+     *
+     * @param agentName   name of the agent
+     * @param oldestCycle oldest cycle to keep
+     */
+    void requestPrune(String agentName, int oldestCycle);
+
+    /**
+     * Takes the pending prune request of an agent and clears it.
+     *
+     * @param agentName name of the agent
+     * @return oldest cycle to keep, or {@code 0} when nothing was requested
+     */
+    int takePrune(String agentName);
 }

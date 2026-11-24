@@ -8,6 +8,7 @@ import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.domain.model.history.OccurrenceRecord;
 import jason.mind.api.core.domain.model.timeline.AgentCycle;
+import jason.mind.api.core.ports.out.history.Footprint;
 import jason.mind.api.core.domain.model.timeline.CollectionTimeline;
 import jason.mind.api.core.domain.model.timeline.Entity;
 import jason.mind.api.core.domain.model.timeline.Moment;
@@ -169,6 +170,12 @@ public class HistoryQueryRepositoryAdapter implements HistoryQueryRepositoryPort
     public Optional<Agent> agent(String name) {
         AgentStore s = this.memory.findStore(name);
         return s == null ? Optional.empty() : Optional.of(s.agent);
+    }
+
+    @Override
+    public Footprint footprint(String agent) {
+        AgentStore s = this.memory.findStore(agent);
+        return s == null ? new Footprint(0, 0, 0) : s.footprint();
     }
 
     @Override

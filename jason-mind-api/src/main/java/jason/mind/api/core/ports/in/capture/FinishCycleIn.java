@@ -8,8 +8,10 @@ package jason.mind.api.core.ports.in.capture;
  * @param sense      whether the sense phase ran
  * @param deliberate whether the deliberate phase ran
  * @param act        whether the act phase ran
+ * @param captureNanos time the capture spent during the cycle, in nanoseconds, or {@code 0} when not measured
  * @author Gabriel Lima
  */
-public record FinishCycleIn(String agent, int cycle, boolean sense, boolean deliberate, boolean act) {
+public record FinishCycleIn(String agent, int cycle, boolean sense, boolean deliberate, boolean act,
+                            long captureNanos) {
 
 }

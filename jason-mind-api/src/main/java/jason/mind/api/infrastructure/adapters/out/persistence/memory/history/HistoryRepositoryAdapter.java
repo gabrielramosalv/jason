@@ -110,6 +110,18 @@ public class HistoryRepositoryAdapter implements HistoryRepositoryPort {
     }
 
     @Override
+    public void requestPrune(String agentName, int oldestCycle) {
+        AgentStore s = requireStore(agentName);
+        s.pendingPrune.accumulateAndGet(oldestCycle, Math::max);
+    }
+
+    @Override
+    public int takePrune(String agentName) {
+        AgentStore s = this.memory.findStore(agentName);
+        return s == null ? 0 : s.pendingPrune.getAndSet(0);
+    }
+
+    @Override
     public void prune(String agentName, int oldestCycle) {
         AgentStore s = requireStore(agentName);
         s.prune(oldestCycle);

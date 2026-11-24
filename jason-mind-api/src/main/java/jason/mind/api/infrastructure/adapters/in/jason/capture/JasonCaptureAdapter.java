@@ -155,6 +155,9 @@ public final class JasonCaptureAdapter implements ReasoningListener {
     @Getter(AccessLevel.PACKAGE)
     private volatile boolean ended;
 
+    /** Time the capture spent in the cycle that is closing, in nanoseconds, set by the metering listener. */
+    private volatile long captureNanos;
+
     /** Number of the current reasoning cycle. */
     private volatile int cycle;
 
@@ -442,6 +445,15 @@ public final class JasonCaptureAdapter implements ReasoningListener {
     }
 
     /**
+     * Sets the time the capture spent in the cycle that is about to close.
+     *
+     * @param nanos time in nanoseconds
+     */
+    void captureNanos(long nanos) {
+        this.captureNanos = nanos;
+    }
+
+    /**
      * Closes a reasoning cycle, recording the pending option search and remaining changes before finishing it.
      *
      * @param ts          transition system of the agent
@@ -455,7 +467,8 @@ public final class JasonCaptureAdapter implements ReasoningListener {
         this.captureGapDiff();
         this.inCycle = false;
         this.safe(() -> this.ports.finishCycle()
-                .execute(new FinishCycleIn(this.agent, cycleNumber, this.active[0], this.active[1], this.active[2])));
+                .execute(new FinishCycleIn(this.agent, cycleNumber, this.active[0], this.active[1], this.active[2],
+                        this.captureNanos)));
         this.lastFinishedCycle = cycleNumber;
     }
 
@@ -635,7 +648,7 @@ public final class JasonCaptureAdapter implements ReasoningListener {
         this.registeredSources.addAll(files);
         this.safe(() -> this.ports.loadSources().execute(new LoadSourcesIn(this.agent, files)));
         this.captureDiff(Moment.of(this.agent, 0, 0, ReasoningStep.INITIAL_LOAD, 1), ReasoningStep.INITIAL_LOAD);
-        this.safe(() -> this.ports.finishCycle().execute(new FinishCycleIn(this.agent, 0, false, false, false)));
+        this.safe(() -> this.ports.finishCycle().execute(new FinishCycleIn(this.agent, 0, false, false, false, 0)));
     }
 
     /**

@@ -154,6 +154,14 @@ public interface HistoryQueryRepositoryPort {
     boolean wasPruned(String agent, long id);
 
     /**
+     * Counts what an agent holds in memory. The count may be a few seconds old.
+     *
+     * @param agent name of the agent
+     * @return the count, or an empty one when the agent is unknown
+     */
+    Footprint footprint(String agent);
+
+    /**
      * Returns all recorded messages.
      *
      * @return recorded messages
