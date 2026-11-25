@@ -17,6 +17,9 @@ function unwrap(term: string): string {
 /** O gatilho do plano, como `+!orderFood` ou `+choice(Option)`. */
 export const planTrigger = (plan: Plan) => `${plan.trigger.operator}${TRIGGER_MARK[plan.trigger.type] ?? ''}${plan.trigger.literal}`
 
+/** O termo de topo do contexto na posição dada (a mesma da avaliação do plano), ou nulo se o plano não o tem. */
+export const contextTerm = (plan: Plan, index: number): string | null => (plan.context[index] ? unwrap(plan.context[index]) : null)
+
 /** O contexto do plano ligado por `&`; vazio quando o plano não tem contexto. */
 export const planContext = (plan: Plan) => plan.context.map(unwrap).join(' & ')
 

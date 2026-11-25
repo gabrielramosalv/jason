@@ -12,10 +12,13 @@ import { useProgram } from '@/features/inspector/composables/useProgram'
 import { useReasoning } from '../composables/useReasoning'
 import { PHASES, STEPS } from '../domain/step-catalog'
 import type { StepInfo } from '../domain/step-catalog'
-import { chipsOf } from '../domain/step-chips'
+import { badgesOf, chipsOf, splitZones } from '../domain/step-chips'
 import type { StepChip } from '../domain/step-chips'
 import type { PhaseName, ReasoningStep } from '../types/reasoning.types'
 import ExplainDialog from './ExplainDialog.vue'
+import ReasoningGraph from './ReasoningGraph.vue'
+import { lifecycleKind } from '../domain/reasoning-graph'
+import type { GraphChipNode, GraphStepNode, LifecycleTarget } from '../domain/reasoning-graph'
 
 /** Corpo do painel Reasoning: o ciclo em três fases e nove passos, com zoom, arraste e explicação por chip. */
 const session = useSessionStore()
@@ -28,6 +31,8 @@ const enabled = computed(() => layout.visible.reason)
 const { data, error } = useReasoning(selectedAgent, cycle, enabled)
 
 const showIdle = ref(true)
+/** O diagrama de passos (colunas fixas) ou o grafo do ciclo, em teste. */
+const view = ref<'steps' | 'graph'>('graph')
 const iteration = reactive<Record<string, number | undefined>>({})
 const occurrence = reactive<Record<string, number | undefined>>({})
 const explained = ref<{ chip: StepChip; step: StepInfo } | null>(null)
@@ -48,6 +53,33 @@ const selectedStep = (info: StepInfo) => {
   return list.find((s) => s.ordinal === occurrence[info.step]) ?? list.at(-1) ?? null
 }
 
+// ocorrência escolhida numa janela de Life cycle: aplica a iteração e a ocorrência do passo uma vez e o destaca
+const focus = computed(() => lifecycle.focus)
+let appliedToken = -1
+watch([focus, data], async () => {
+  const f = focus.value
+  if (!f || data.value?.cycle !== f.cycle || appliedToken === f.token) return
+  appliedToken = f.token
+  const info = STEPS.find((s) => s.step === f.step)
+  if (!info) return
+  iteration[info.phase] = f.iteration
+  occurrence[f.step] = f.ordinal
+  await nextTick()
+  canvas.value?.querySelector<HTMLElement>('[data-focused="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+})
+const stepFocused = (info: StepInfo, step: ReasoningStep | null) => {
+  const f = focus.value
+  return !!f && !!step && f.cycle === cycle.value && f.step === info.step && f.iteration === step.iteration && f.ordinal === step.ordinal
+}
+/** Os tipos de ocorrência que o chip representa no passo: nasceu, mudou e terminou. */
+const kindsOf = (c: StepChip) => [c.isNew && 'START', c.changed && 'CHANGE', c.removed && 'END'].filter(Boolean)
+const chipFocused = (chip: StepChip) => {
+  const f = focus.value
+  if (!f || chip.id !== f.entityId) return false
+  // várias ocorrências da mesma entidade no passo têm chips próprios: só acende o do tipo escolhido
+  return !f.kind || !['START', 'CHANGE', 'END'].includes(f.kind) || kindsOf(chip).includes(f.kind)
+}
+
 const { plans } = useProgram()
 const plansById = computed(() => new Map(plans.value.map((p) => [p.id, p])))
 
@@ -59,7 +91,7 @@ const phases = computed(() =>
       .map((info) => {
         const step = selectedStep(info)
         const chips = step ? chipsOf(step, plansById.value) : []
-        return { info, step, chips, occs: occurrencesOf(info), idle: !chips.length }
+        return { info, step, chips, zones: splitZones(chips), occs: occurrencesOf(info), idle: !chips.length }
       })
       .filter((s) => showIdle.value || !s.idle),
   })).filter((p) => p.steps.length),
@@ -76,7 +108,7 @@ let observer: ResizeObserver | null = null
 function fit() {
   const sc = scroller.value
   const cv = canvas.value
-  if (!sc || !cv) return
+  if (!sc || !cv || !sc.clientWidth) return
   // todas as caixas de etapa têm a largura da maior: mede cada uma no tamanho natural e aplica a comum
   cv.style.removeProperty('--step-w')
   cv.style.removeProperty('--step-h')
@@ -128,17 +160,9 @@ function onMove(e: PointerEvent) {
   sc.scrollTop = drag.t - (e.clientY - drag.y)
 }
 
-/** O indicador do canto do chip reúne tudo o que aconteceu com ele no passo: criado, modificado, gerou ou mexeu em outros. */
-function badgesOf(c: StepChip): { icon: 'badge-new' | 'badge-change' | 'badge-effect'; label: string }[] {
-  const out: { icon: 'badge-new' | 'badge-change' | 'badge-effect'; label: string }[] = []
-  if (c.isNew) out.push({ icon: 'badge-new', label: 'created' })
-  if (c.changed) out.push({ icon: 'badge-change', label: 'modified' })
-  if (c.effects.length) out.push({ icon: 'badge-effect', label: 'acted on other entities' })
-  return out
-}
-
 /** Até 6 chips por passo, o escolhido sempre em primeiro; o resto fica atrás do chip Show more, que abre a lista completa. */
 const CHIP_LIMIT = 6
+const zoneNames = ['nature', 'result'] as const
 const visibleChips = (chips: StepChip[]) => {
   const chosen = chips.findIndex((c) => c.chosen)
   const ordered = chosen > 0 ? [chips[chosen]!, ...chips.filter((_, i) => i !== chosen)] : chips
@@ -149,7 +173,9 @@ const moreItems = computed<MoreItem[]>(() =>
   (more.value?.chips ?? []).map((c) => ({ key: c.key, text: c.text, bg: c.idle ? 'var(--chip-idle-bg)' : CONCEPT_COLORS[c.kind].bg, color: c.idle ? 'var(--c-8a8f99)' : CONCEPT_COLORS[c.kind].fg, tip: c.tip, chosen: c.chosen, removed: c.removed, badge: c.badge, kind: c.kind })),
 )
 function openMore(info: StepInfo, chips: StepChip[], ev: MouseEvent) {
-  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+  openMoreAt(info, chips, (ev.currentTarget as HTMLElement).getBoundingClientRect())
+}
+function openMoreAt(info: StepInfo, chips: StepChip[], r: DOMRect) {
   more.value = { info, chips, anchor: { left: Math.max(8, r.left), bottom: Math.max(8, window.innerHeight - r.top + 6), maxHeight: Math.max(220, r.top - 16) } }
 }
 function pickMore(key: string) {
@@ -222,9 +248,9 @@ function measureLanes() {
   // ligações curtas entre passos encadeados
   const chain: [string, string][] = [
     ['Select event', 'Select plan'],
-    ['Select plan', 'Create intention'],
-    ['Select intention', 'Execute step'],
-    ['Execute step', 'Clear intention'],
+    ['Select plan', 'Push goal'],
+    ['Select intention', 'Advance goal'],
+    ['Advance goal', 'Clear intention'],
   ]
   // a linha liga o chip de um passo ao chip relacionado do passo seguinte, no meio da altura dos chips
   for (const [from, to] of chain) {
@@ -237,7 +263,7 @@ function measureLanes() {
   // filas: centradas no vão entre fases, com curvas que descem das caixas e sobem às caixas seguintes
   const defs: { label: string; between: [number, number]; from: string[]; to: string }[] = [
     { label: 'Event queue', between: [0, 1], from: ['Perceive environment', 'Read message'], to: 'Select event' },
-    { label: 'Intention queue', between: [1, 2], from: ['Create intention'], to: 'Select intention' },
+    { label: 'Intention queue', between: [1, 2], from: ['Push goal'], to: 'Select intention' },
   ]
   const curve = (x1: number, y1: number, x2: number, y2: number) =>
     `M${f(x1)} ${f(y1)} C${f(x1)} ${f(y1 + (y2 - y1) * 0.75)} ${f(x1 + (x2 - x1) * 0.35)} ${f(y2)} ${f(x2)} ${f(y2)}`
@@ -285,16 +311,47 @@ function measureLanes() {
   })
 }
 
+function openExplain(chip: StepChip, info: StepInfo, from: HTMLElement | null) {
+  const r = from?.closest('[data-k="reason"]')?.getBoundingClientRect()
+  anchor.value = { left: (r?.left ?? 12) + 12, bottom: window.innerHeight - (r?.bottom ?? window.innerHeight) + 12, maxHeight: Math.max(220, (r?.height ?? 400) + 280) }
+  explained.value = { chip, step: info }
+}
+
+function onGraphCandidates(node: GraphStepNode, rect: DOMRect) {
+  openMoreAt(node.info, node.options, rect)
+}
+
+/** Abre o Life cycle da entidade no momento do passo, com o tipo da ocorrência (nasceu, mudou, terminou) quando há. */
+function openLifecycleAt(entity: { id: string; type: string; label: string }, step: ReasoningStep, kind: LifecycleTarget['kind']) {
+  if (!entity.id || !session.selectedAgent) return
+  const cycle = session.shown?.cycle
+  const highlight = cycle != null ? { cycle, step: step.step, iteration: step.iteration, ordinal: step.ordinal, kind } : null
+  lifecycle.open({ agent: session.selectedAgent, id: entity.id, type: entity.type, label: entity.label }, undefined, highlight)
+}
+
+/** O clique num chip do grafo abre o Life cycle na última ação que ele recebeu neste ciclo. */
+function onGraphLifecycle(node: GraphChipNode) {
+  const occ = node.last ?? node.first
+  openLifecycleAt({ id: node.chip.id ?? '', type: node.chip.entityType, label: node.chip.text }, occ.step, lifecycleKind(occ.chip))
+}
+
+/** O clique no ícone de uma linha abre a ocorrência a que ela se refere. */
+function onGraphLifecycleAt(target: LifecycleTarget) {
+  openLifecycleAt(target.entity, target.step, target.kind)
+}
+
 function open(chip: StepChip, info: StepInfo, ev: MouseEvent, step?: ReasoningStep) {
   if (chip.candidate) {
-    const r = (ev.currentTarget as HTMLElement).closest('[data-k="reason"]')?.getBoundingClientRect()
-    anchor.value = { left: (r?.left ?? 12) + 12, bottom: window.innerHeight - (r?.bottom ?? window.innerHeight) + 12, maxHeight: Math.max(220, (r?.height ?? 400) + 280) }
-    explained.value = { chip, step: info }
+    openExplain(chip, info, ev.currentTarget as HTMLElement)
     return
   }
+  openLifecycle(chip, step)
+}
+
+function openLifecycle(chip: StepChip, step?: ReasoningStep) {
   if (chip.id && session.selectedAgent) {
     const cycle = session.shown?.cycle
-    const highlight = (chip.changed || chip.isNew || chip.removed || chip.effects.length) && step && cycle != null ? { cycle, step: step.step, iteration: step.iteration, ordinal: step.ordinal } : null
+    const highlight = (chip.changed || chip.isNew || chip.removed || chip.effects.length) && step && cycle != null ? { cycle, step: step.step, iteration: step.iteration, ordinal: step.ordinal, kind: chip.removed ? 'END' : chip.isNew ? 'START' : chip.changed ? 'CHANGE' : null } : null
     lifecycle.open({ agent: session.selectedAgent, id: chip.id, type: chip.entityType, label: chip.text }, undefined, highlight)
   }
 }
@@ -303,18 +360,23 @@ function open(chip: StepChip, info: StepInfo, ev: MouseEvent, step?: ReasoningSt
 <template>
   <div class="mi-tracer-wrap" style="position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column">
     <p v-if="error" class="mi-warnbox">{{ error }}</p>
-    <div class="mi-zoomdock">
-      <div class="mi-zoombox" role="group" aria-label="Zoom" style="opacity: 1">
+    <div class="mi-zoomdock" :style="view === 'graph' ? { zIndex: 6 } : undefined">
+      <span class="mi-iters" role="group" aria-label="View">
+        <button type="button" class="mi-iterbtn" :aria-pressed="view === 'steps'" @click="view = 'steps'">Steps</button>
+        <button type="button" class="mi-iterbtn" :aria-pressed="view === 'graph'" @click="view = 'graph'">Graph</button>
+      </span>
+      <div v-if="view === 'steps'" class="mi-zoombox" role="group" aria-label="Zoom" style="opacity: 1">
         <button v-if="manual" type="button" class="mi-zbtn" title="Fit to width" aria-label="Fit to width" @click="manual = false; fit()"><Icon name="fit" /></button>
         <button type="button" class="mi-zbtn" title="Zoom out" aria-label="Zoom out" @click="setZoom(zoom / 1.25)"><Icon name="minimize" /></button>
         <button type="button" class="mi-zbtn" title="Zoom in" aria-label="Zoom in" @click="setZoom(zoom * 1.25)"><Icon name="zoom-in" /></button>
       </div>
-      <div class="mi-idle" style="padding: var(--sp-4); background: var(--bg-card); border: 1px solid var(--c-e6e8ec); border-radius: 10px">
+      <div v-if="view === 'steps'" class="mi-idle" style="padding: var(--sp-4); background: var(--bg-card); border: 1px solid var(--c-e6e8ec); border-radius: 10px">
         <button type="button" class="mi-btn" :title="showIdle ? 'Hide idle steps' : 'Show idle steps'" :aria-pressed="showIdle" style="gap: var(--sp-4); border-color: transparent; padding: 0 var(--sp-12)" @click="showIdle = !showIdle"><Icon :name="showIdle ? 'eye' : 'eye-off'" /><span style="font-size: 12.8px">Idle steps</span></button>
       </div>
     </div>
-    <div v-if="!phases.length" class="mi-emptybig" role="status" style="margin: auto">{{ showIdle ? 'No reasoning phase in this cycle' : 'No active reasoning step in this cycle. Turn on Idle steps to see all of them.' }}</div>
-    <div v-show="phases.length" ref="scroller" class="mi-tracer-scroll" @wheel="onWheel" @pointerdown="onDown" @pointermove="onMove" @pointerup="drag = null">
+    <ReasoningGraph v-if="view === 'graph'" :steps="steps" :plans="plansById" :focus-entity="focus?.entityId ?? null" @lifecycle="onGraphLifecycle" @lifecycle-at="onGraphLifecycleAt" @candidates="onGraphCandidates" />
+    <div v-if="view === 'steps' && !phases.length" class="mi-emptybig" role="status" style="margin: auto">{{ showIdle ? 'No reasoning phase in this cycle' : 'No active reasoning step in this cycle. Turn on Idle steps to see all of them.' }}</div>
+    <div v-show="view === 'steps' && phases.length" ref="scroller" class="mi-tracer-scroll" @wheel="onWheel" @pointerdown="onDown" @pointermove="onMove" @pointerup="drag = null">
       <div :style="{ position: 'relative', flexShrink: 0, margin: 'auto', width: `${natural.w * zoom}px`, height: `${natural.h * zoom}px` }">
         <div ref="canvas" class="mi-trcanvas" :style="{ transform: `scale(${zoom})` }">
           <div class="mi-phases">
@@ -326,7 +388,7 @@ function open(chip: StepChip, info: StepInfo, ev: MouseEvent, step?: ReasoningSt
                 </span>
               </header>
               <div class="mi-steps">
-                <div v-for="s in p.steps" :key="s.info.step" class="mi-stepbox" :class="s.idle && 'mi-idlestep'" :data-step="s.info.title">
+                <div v-for="s in p.steps" :key="s.info.step" class="mi-stepbox" :class="[s.idle && 'mi-idlestep', stepFocused(s.info, s.step) && 'mi-focused']" :data-step="s.info.title" :data-focused="stepFocused(s.info, s.step)">
                   <div class="mi-steptitle">
                     <span>{{ s.info.title }}</span>
                     <span v-if="s.occs.length > 1" class="mi-iters" role="group" aria-label="Occurrences">
@@ -335,22 +397,30 @@ function open(chip: StepChip, info: StepInfo, ev: MouseEvent, step?: ReasoningSt
                   </div>
                   <div class="mi-chiplist">
                     <span v-if="s.idle" class="mi-tchip mi-tchip-flow" :style="{ background: 'var(--chip-idle-bg)', color: 'var(--c-8a8f99)' }">{{ s.info.idle }}</span>
-                    <button
-                      v-for="c in visibleChips(s.chips)"
-                      :key="c.key"
-                      type="button"
-                      class="mi-tchip mi-tchip-flow"
-                      :title="c.tip"
-                      :style="{ background: c.idle ? 'var(--chip-idle-bg)' : CONCEPT_COLORS[c.kind].bg, color: c.idle ? 'var(--c-8a8f99)' : CONCEPT_COLORS[c.kind].fg, cursor: 'pointer', border: 'none', font: 'inherit', fontSize: '11.5px', textAlign: 'left' }"
-                      @click="open(c, s.info, $event, s.step ?? undefined)"
-                    >
-                      <Icon :name="CONCEPT_ICON[c.kind]" />
+                    <template v-for="zone in zoneNames" :key="zone">
+                      <template v-if="s.zones[zone].length">
+                        <div class="mi-zonehead">{{ zone === 'nature' ? 'Candidates' : 'Changes' }}</div>
+                        <template v-for="list in [s.zones[zone]]" :key="zone">
+                        <button
+                          v-for="c in visibleChips(list)"
+                          :key="c.key"
+                          type="button"
+                          class="mi-tchip mi-tchip-flow"
+                          :class="stepFocused(s.info, s.step) && chipFocused(c) && 'mi-chipfocus'"
+                          :title="c.tip"
+                          :style="{ background: c.idle ? 'var(--chip-idle-bg)' : CONCEPT_COLORS[c.kind].bg, color: c.idle ? 'var(--c-8a8f99)' : CONCEPT_COLORS[c.kind].fg, cursor: 'pointer', border: 'none', font: 'inherit', fontSize: '11.5px', textAlign: 'left' }"
+                          @click="open(c, s.info, $event, s.step ?? undefined)"
+                        >
+                          <Icon :name="CONCEPT_ICON[c.kind]" />
                       
-                      <span v-if="badgesOf(c).length" class="mi-new mi-badges" role="img" :aria-label="badgesOf(c).map((b) => b.label).join(', ')" :title="badgesOf(c).map((b) => b.label).join(', ')"><Icon v-for="b in badgesOf(c)" :key="b.icon" :name="b.icon" /></span>
-                      <span class="mi-tchip-t" :style="c.removed ? { textDecoration: 'line-through' } : undefined">{{ c.text }}</span>
-                      <span v-if="c.badge" class="mi-pill" :style="{ background: 'var(--ov-08)', color: c.idle ? 'var(--c-8a8f99)' : CONCEPT_COLORS[c.kind].fg, marginLeft: 'auto', flexShrink: 0 }">#{{ c.badge }}</span>
-                    </button>
-                    <button v-if="s.chips.length > CHIP_LIMIT" type="button" class="mi-tchip mi-tchip-flow" :title="`Show all ${s.chips.length}`" style="background: transparent; color: var(--c-8a8f99); cursor: pointer; border: none; font: inherit; font-size: 11.5px; text-align: left" @click="openMore(s.info, s.chips, $event)">Show more (+{{ s.chips.length - CHIP_LIMIT }})</button>
+                          <span v-if="badgesOf(c).length" class="mi-new mi-badges" role="img" :aria-label="badgesOf(c).map((b) => b.label).join(', ')" :title="badgesOf(c).map((b) => b.label).join(', ')"><Icon v-for="b in badgesOf(c)" :key="b.icon" :name="b.icon" /></span>
+                          <span class="mi-tchip-t">{{ c.text }}</span>
+                          <span v-if="c.badge" class="mi-pill" :style="{ background: 'var(--ov-08)', color: c.idle ? 'var(--c-8a8f99)' : CONCEPT_COLORS[c.kind].fg, marginLeft: 'auto', flexShrink: 0 }">#{{ c.badge }}</span>
+                        </button>
+                        <button v-if="list.length > CHIP_LIMIT" type="button" class="mi-tchip mi-tchip-flow" :title="`Show all ${list.length}`" style="background: transparent; color: var(--c-8a8f99); cursor: pointer; border: none; font: inherit; font-size: 11.5px; text-align: left" @click="openMore(s.info, list, $event)">Show more (+{{ list.length - CHIP_LIMIT }})</button>
+                        </template>
+                      </template>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -365,6 +435,6 @@ function open(chip: StepChip, info: StepInfo, ev: MouseEvent, step?: ReasoningSt
       </div>
     </div>
     <MoreDialog v-if="more" :title="more.info.title" searchable :items="moreItems" :anchor="more.anchor" @close="more = null" @pick="pickMore" />
-    <ExplainDialog v-if="explained" :chip="explained.chip" :step="explained.step" :anchor="anchor" @close="explained = null" />
+    <ExplainDialog v-if="explained" :chip="explained.chip" :step="explained.step" :plans="plansById" :anchor="anchor" @close="explained = null" />
   </div>
 </template>

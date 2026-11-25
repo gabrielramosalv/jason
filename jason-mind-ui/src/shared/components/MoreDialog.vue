@@ -43,7 +43,7 @@ function toggleKind(kind: string) {
       </div>
       <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--sp-8) var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-4)">
         <button v-for="i in shown" :key="i.key" type="button" :title="i.tip" class="mi-moreitem" :style="{ background: i.bg, color: i.color }" @click="emit('pick', i.key)">
-          <span :style="{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'left', textDecoration: i.removed ? 'line-through' : 'none' }">{{ i.text }}</span>
+          <span :style="{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'left' }">{{ i.text }}</span>
           <span v-if="i.chosen" role="img" aria-label="Chosen" title="Chosen" style="display: inline-grid; flex-shrink: 0"><Icon name="chosen-small" /></span>
           <span v-if="i.badge" class="mi-pill" :style="{ background: 'var(--ov-08)', color: i.color }">#{{ i.badge }}</span>
         </button>

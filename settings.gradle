@@ -6,3 +6,4 @@ include('jason-cli')
 include('jason-interpreter')
 
 include('jason-mind-api')
+include('jason-mind-ui')

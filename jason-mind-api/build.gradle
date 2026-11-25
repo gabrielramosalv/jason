@@ -36,6 +36,18 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
 }
 
+sourceSets {
+    main {
+        resources {
+            srcDir project(':jason-mind-ui').layout.buildDirectory.dir('generated-resources')
+        }
+    }
+}
+
+processResources {
+    dependsOn ':jason-mind-ui:copyUi'
+}
+
 jar {
     archiveBaseName = 'jason-mind-api'
     manifest {

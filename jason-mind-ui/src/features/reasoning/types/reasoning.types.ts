@@ -23,9 +23,15 @@ export interface Candidate extends EntityRef {
   terms: PlanTerm[] | null
 }
 
+/** A entidade criada ou removida num passo, com a sequência da ocorrência (a ordem total dos fatos dentro do agente). */
+export interface OccurrenceRef extends EntityRef {
+  sequence?: number
+}
+
 export interface EntityChangeRef extends EntityRef {
   timeline: string
   value: string
+  sequence?: number
 }
 
 export type PhaseName = 'SENSE' | 'DELIBERATE' | 'ACT'
@@ -35,6 +41,7 @@ export interface StepEffect {
   kind: 'GENERATES' | 'MODIFIES' | 'REMOVES'
   by: string
   entity: EntityRef
+  sequence?: number
 }
 
 export interface ReasoningStep {
@@ -46,11 +53,11 @@ export interface ReasoningStep {
   inputs: EntityRef[]
   chosen: EntityRef | null
   candidates: Candidate[]
-  created: EntityRef[]
+  created: OccurrenceRef[]
   changed: EntityChangeRef[]
   /** Ausente em servidores antigos. */
   effects?: StepEffect[]
-  removed: EntityRef[]
+  removed: OccurrenceRef[]
 }
 
 export interface ReasoningResponse {

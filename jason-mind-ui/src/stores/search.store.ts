@@ -73,6 +73,7 @@ export const useSearchStore = defineStore('search', () => {
   function clear(resetQuery = true) {
     generation++
     if (resetQuery) query.value = ''
+    mode.value = 'text'
     result.value = null
     index.value = 0
     error.value = null

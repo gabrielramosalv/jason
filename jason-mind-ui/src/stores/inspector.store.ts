@@ -16,6 +16,18 @@ export const useInspectorStore = defineStore('inspector', () => {
   const beliefFilter = reactive<Record<BeliefGroup, boolean>>({ self: false, msg: false, env: false })
   const beliefShown = (group: BeliefGroup) => !Object.values(beliefFilter).some(Boolean) || beliefFilter[group]
 
+  /** O objetivo que abriu a intenção é o primeiro da pilha dela (`goal`); os outros foram chamados por ele (`subgoal`). Sem estado, `goal`. */
+  function goalKindOf(intendedMeansId: string | null | undefined): 'goal' | 'subgoal' {
+    for (const i of state.value?.intentions ?? []) {
+      const at = i.levels.findIndex((l) => l.intendedMeansId === intendedMeansId)
+      if (at >= 0) return at === 0 ? 'goal' : 'subgoal'
+    }
+    return 'goal'
+  }
+  /** A intenção que tem o objetivo na pilha dela, no estado do ciclo exibido. */
+  function intentionOfGoal(intendedMeansId: string): string | null {
+    return state.value?.intentions?.find((i) => i.levels.some((l) => l.intendedMeansId === intendedMeansId))?.id ?? null
+  }
   function selectIntention(id: string | null) {
     selectedIntentionId.value = id
   }
@@ -24,5 +36,5 @@ export const useInspectorStore = defineStore('inspector', () => {
   }
   const isOpen = (key: string) => !collapsed[key]
 
-  return { state, loading, error, selectedIntentionId, collapsed, beliefFilter, beliefShown, selectIntention, toggleSection, isOpen }
+  return { state, loading, error, selectedIntentionId, collapsed, beliefFilter, beliefShown, goalKindOf, intentionOfGoal, selectIntention, toggleSection, isOpen }
 })

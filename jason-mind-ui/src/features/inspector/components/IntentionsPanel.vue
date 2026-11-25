@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import EntityChip from '@/shared/components/EntityChip.vue'
 import MoreDialog from '@/shared/components/MoreDialog.vue'
 import type { MoreItem } from '@/shared/components/MoreDialog.vue'
@@ -13,7 +13,7 @@ import { intentionCategory } from '../domain/intention-category'
 import type { IntentionCategory } from '../domain/intention-category'
 import type { Intention } from '../types/state.types'
 
-/** Painel Intentions: as intenções do ciclo agrupadas por categoria, com os subobjetivos de cada uma. */
+/** Painel Intentions: as intenções do ciclo agrupadas por categoria, cada uma com todos os objetivos da sua pilha (o primeiro e os que ele chamou). */
 const inspector = useInspectorStore()
 
 const SECTIONS: { key: IntentionCategory; label: string; icon: IconName }[] = [
@@ -29,12 +29,20 @@ const groups = computed(() =>
   SECTIONS.map((s) => ({ ...s, items: intentions.value.filter((i) => intentionCategory(i) === s.key) })).filter((s) => s.items.length),
 )
 
-const SUB_LIMIT = 3
-const subOpen = reactive<Record<string, boolean>>({})
+const GOAL_LIMIT = 3
 const more = ref<{ intention: Intention; anchor: { left: number; bottom: number; maxHeight: number } } | null>(null)
-const subsOf = (i: Intention) => i.levels.slice(1)
-const visibleSubs = (i: Intention) => subsOf(i).slice(0, SUB_LIMIT)
-const moreItems = computed<MoreItem[]>(() => subsOf(more.value?.intention ?? ({ levels: [] } as unknown as Intention)).map((l) => ({ key: l.intendedMeansId, text: l.trigger, bg: CONCEPT_COLORS.subgoal.bg, color: CONCEPT_COLORS.subgoal.fg })))
+/** A pilha, do topo (o que roda) para a base: o objetivo que abriu a intenção é o último. */
+const goalsOf = (i: Intention) => i.levels.map((level, at) => ({ level, kind: at === 0 ? ('goal' as const) : ('subgoal' as const) })).reverse()
+/** Até {@link GOAL_LIMIT} objetivos: os mais novos e o original; os do meio ficam atrás do "Show more". */
+const shownGoals = (i: Intention) => {
+  const all = goalsOf(i)
+  return all.length <= GOAL_LIMIT ? all : [...all.slice(0, GOAL_LIMIT - 1), all[all.length - 1]!]
+}
+const hiddenGoals = (i: Intention) => {
+  const all = goalsOf(i)
+  return all.length <= GOAL_LIMIT ? [] : all.slice(GOAL_LIMIT - 1, -1)
+}
+const moreItems = computed<MoreItem[]>(() => (more.value ? hiddenGoals(more.value.intention) : []).map(({ level, kind }) => ({ key: level.intendedMeansId, text: level.trigger, bg: CONCEPT_COLORS[kind].bg, color: CONCEPT_COLORS[kind].fg, badge: numericId(level.intendedMeansId) })))
 
 function openMore(it: Intention, ev: MouseEvent) {
   const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
@@ -49,35 +57,25 @@ function openMore(it: Intention, ev: MouseEvent) {
       <PanelSection :label="g.label" :icon="g.icon" :count="g.items.length" :open="inspector.isOpen(`int-${g.key}`)" :divider="n > 0" @toggle="inspector.toggleSection(`int-${g.key}`)">
         <div class="mi-chips">
           <template v-for="it in g.items" :key="it.id">
-            <EntityChip v-if="!subsOf(it).length" type="intention" :id="it.id" :label="it.levels[0]?.trigger ?? it.id" :id-badge="numericId(it.id)" :selected="it.id === inspector.selectedIntentionId" @click.capture="inspector.selectIntention(it.id)" />
-            <div v-else class="mi-intgrp">
+            <div class="mi-intgrp">
               <div style="display: flex; align-items: center; gap: var(--sp-2)">
-                <EntityChip type="intention" :id="it.id" :label="it.levels[0]?.trigger ?? it.id" :id-badge="numericId(it.id)" @click.capture="inspector.selectIntention(it.id)" />
-                <button
-                  type="button"
-                  class="mi-zbtn mi-subtog"
-                  :title="`Show or hide subgoals (${subsOf(it).length})`"
-                  aria-label="Show or hide subgoals"
-                  :aria-expanded="subOpen[it.id] !== false"
-                  style="height: 20px; min-width: 20px; padding: 0 var(--sp-4); display: inline-flex; align-items: center; justify-content: center; gap: 1px; width: auto"
-                  :style="{ color: 'var(--c-b0306f)' }"
-                  @click="subOpen[it.id] = subOpen[it.id] === false"
-                >
-                  <Icon v-if="subOpen[it.id] !== false" name="subgoals-open" />
-                  <template v-else><Icon name="chip-subgoal" /><span style="font-size: 10px; font-weight: 600; line-height: 1">{{ subsOf(it).length }}</span></template>
-                </button>
+                <EntityChip type="intention" :id="it.id" :label="it.id" :id-badge="numericId(it.id)" icon :selected="it.id === inspector.selectedIntentionId" @click.capture="inspector.selectIntention(it.id)" />
               </div>
-              <template v-if="subOpen[it.id] !== false">
-                <button v-if="subsOf(it).length > SUB_LIMIT" type="button" class="mi-bchip" :title="`Show all ${subsOf(it).length} subgoals`" style="background: transparent; color: var(--c-8a8f99); cursor: pointer" @click="openMore(it, $event)">Show more (+{{ subsOf(it).length - SUB_LIMIT }})</button>
-                <span v-for="sb in visibleSubs(it)" :key="sb.intendedMeansId" class="mi-bchip" :title="`Subgoal on top of intention #${numericId(it.id)}`" :style="{ background: CONCEPT_COLORS.subgoal.bg, color: CONCEPT_COLORS.subgoal.fg, display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)' }">
-                  <Icon name="chip-subgoal" /><span>{{ sb.trigger }}</span>
-                </span>
+              <template v-for="(gl, n) in shownGoals(it)" :key="gl.level.intendedMeansId">
+                <div v-if="hiddenGoals(it).length && n === shownGoals(it).length - 1" class="mi-goalrow">
+                  <span class="mi-golink" aria-hidden="true"><Icon name="goal-link" /></span>
+                  <button type="button" class="mi-bchip" :title="`Show ${hiddenGoals(it).length} more goals`" style="background: transparent; color: var(--c-8a8f99); cursor: pointer" @click="openMore(it, $event)">Show more (+{{ hiddenGoals(it).length }})</button>
+                </div>
+                <div class="mi-goalrow">
+                  <span class="mi-golink" aria-hidden="true"><Icon name="goal-link" /></span>
+                  <EntityChip type="intendedMeans" :kind="gl.kind" :id="gl.level.intendedMeansId" :label="gl.level.trigger" :id-badge="numericId(gl.level.intendedMeansId)" icon />
+                </div>
               </template>
             </div>
           </template>
         </div>
       </PanelSection>
     </template>
-    <MoreDialog v-if="more" :title="`Subgoals of #${numericId(more.intention.id)}`" :items="moreItems" :anchor="more.anchor" @close="more = null" @pick="more = null" />
+    <MoreDialog v-if="more" :title="`More goals of Intention #${numericId(more.intention.id)}`" :items="moreItems" :anchor="more.anchor" @close="more = null" @pick="more = null" />
   </div>
 </template>

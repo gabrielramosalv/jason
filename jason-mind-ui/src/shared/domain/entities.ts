@@ -1,11 +1,12 @@
 import type { IconName } from '@/shared/ui'
 
 /** Conceitos da legenda e as cores de fundo e de texto de cada um (variáveis do tema). */
-export type ConceptKind = 'message' | 'event' | 'plan' | 'intention' | 'subgoal' | 'action' | 'belief'
+export type ConceptKind = 'message' | 'event' | 'plan' | 'intention' | 'goal' | 'subgoal' | 'action' | 'belief'
 
 export const CONCEPT_COLORS: Record<ConceptKind, { bg: string; fg: string }> = {
   belief: { bg: 'var(--c-e2f6e2)', fg: 'var(--c-0a6a0a)' },
   intention: { bg: 'var(--c-e4d3f7)', fg: 'var(--c-6d3aa6)' },
+  goal: { bg: 'var(--c-fbe3ef)', fg: 'var(--c-b0306f)' },
   subgoal: { bg: 'var(--c-fbe3ef)', fg: 'var(--c-b0306f)' },
   event: { bg: 'var(--c-ffe8d3)', fg: 'var(--c-b4540a)' },
   message: { bg: 'var(--c-e6f0fb)', fg: 'var(--c-1d4f91)' },
@@ -17,6 +18,7 @@ export const CONCEPT_ICON: Record<ConceptKind, IconName> = {
   message: 'chip-message',
   event: 'chip-event',
   plan: 'chip-plan',
+  goal: 'chip-goal',
   subgoal: 'chip-subgoal',
   intention: 'chip-intention',
   action: 'chip-action',
@@ -27,6 +29,8 @@ export const CONCEPT_ICON: Record<ConceptKind, IconName> = {
 export function conceptOf(type: string): ConceptKind {
   switch (type) {
     case 'intendedMeans':
+    case 'goal':
+      return 'goal'
     case 'subgoal':
       return 'subgoal'
     case 'message':
@@ -40,6 +44,9 @@ export function conceptOf(type: string): ConceptKind {
       return 'plan'
   }
 }
+
+/** O texto do chip: a intenção aparece só como "Intention" (o número vem no #id) e cada objetivo dela é um chip à parte. */
+export const chipText = (type: string, label: string) => (type === 'intention' ? 'Intention' : label)
 
 export function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`

@@ -12,7 +12,7 @@ const THING: Record<string, string> = {
   belief: 'a belief',
   event: 'an event',
   intention: 'an intention',
-  intendedMeans: 'a plan',
+  intendedMeans: 'a goal',
   subgoal: 'a subgoal',
   message: 'a message',
   plan: 'a plan',
@@ -35,11 +35,11 @@ function byCode(code: string, e: LifecycleEntry): string | null {
     case 'BELIEF_ADDED_BY_MESSAGE':
       return `Learned from a message${from(e)}`
     case 'BELIEF_ADDED_BY_INTENTION':
-      return 'Added by an intention'
+      return 'Added by a goal'
     case 'BELIEF_REMOVED_BY_ENVIRONMENT':
       return 'No longer perceived: removed from the belief base'
     case 'BELIEF_REMOVED_BY_INTENTION':
-      return 'Removed by an intention'
+      return 'Removed by a goal'
     case 'MESSAGE_RECEIVED':
       return 'Received by the agent'
     case 'MESSAGE_READ':
@@ -49,7 +49,7 @@ function byCode(code: string, e: LifecycleEntry): string | null {
     case 'EVENT_TRIGGERED_BY_MESSAGE':
       return `Triggered by a message${from(e)}`
     case 'EVENT_TRIGGERED_BY_INTENTION':
-      return 'Triggered by an intention'
+      return 'Triggered by a goal'
     case 'EVENT_TRIGGERED_BY_FAILURE':
       return 'Triggered by a failure'
     case 'EVENT_TRIGGERED_BY_ACTION_FAILURE':
@@ -143,7 +143,29 @@ function byTimeline(e: LifecycleEntry): string {
   }
 }
 
-/** Efeito sobre outra entidade sem código próprio: a frase vem do tipo da entidade afetada. */
+/** O que o efeito fez à intenção, pelo campo que mudou e pelo valor novo (a janela mostra a intenção logo abaixo). */
+function effectOnIntention(e: LifecycleEntry): string {
+  const value = e.value ?? ''
+  switch (e.timeline) {
+    case 'place':
+      if (value === 'RUNNING') return 'Put the intention back in the queue'
+      if (value === 'NONE') return 'Took the intention out of the queue'
+      if (value === 'SELECTED_INTENTION') return 'Gave the intention the turn'
+      if (value === 'PENDING_INTENTIONS') return 'Made the intention wait for an event'
+      return `Moved the intention to ${words(value)}`
+    case 'waitingOn':
+      if (!value || value === 'null') return 'Released the intention from its wait'
+      if (/^e\d+$/.test(value)) return `Made the intention wait for the event #${numericId(value)}`
+      if (/^a\d+$/.test(value)) return 'Made the intention wait for an action'
+      return `Made the intention wait for ${value}`
+    case 'suspended':
+      return value === 'true' ? 'Suspended the intention' : 'Resumed the intention'
+    default:
+      return 'Changed the intention'
+  }
+}
+
+/** Efeito sobre outra entidade sem código próprio: a frase vem do tipo da entidade afetada e do que mudou nela. */
 function byEffect(e: LifecycleEntry): string {
   const type = e.entity?.type
   switch (e.kind) {
@@ -154,37 +176,73 @@ function byEffect(e: LifecycleEntry): string {
       if (type === 'belief') return 'Added a belief'
       return `Started ${thing(type)}`
     case 'MODIFIES':
-      if (type === 'intention') return 'Changed an intention'
-      if (type === 'belief') return 'Updated a belief'
+      if (type === 'intention') return effectOnIntention(e)
+      if (type === 'belief') {
+        if (e.timeline === 'annotations') return 'Changed the annotations of a belief'
+        if (e.timeline === 'sources') return 'Changed the sources of a belief'
+        return 'Updated a belief'
+      }
+      if (type === 'intendedMeans' || type === 'subgoal') {
+        const n = Number(e.value)
+        return e.timeline === 'currentDeed' && Number.isInteger(n) ? `Moved a goal to deed ${n + 1}` : 'Changed a goal'
+      }
       return `Changed ${thing(type)}`
     case 'REMOVES':
       if (type === 'belief') return 'Removed a belief'
       if (type === 'event') return 'Dropped an event'
+      if (type === 'intendedMeans' || type === 'subgoal') return 'Ended a goal'
       return `Removed ${thing(type)}`
     default:
       return 'Changed'
   }
 }
 
-/** Começo e fim sem código: depende do tipo da entidade dona da janela. */
+/** Começo e fim sem código: depende do tipo da entidade dona da janela e de a entidade vir da carga do programa. */
 function byOwner(e: LifecycleEntry, ownerType: string): string {
   const start = e.kind === 'START'
+  const loaded = start && e.moment.step === 'INITIAL_LOAD'
   switch (ownerType) {
     case 'belief':
-      return start ? 'Added to the belief base' : 'Removed from the belief base'
+      return loaded ? 'Loaded with the program' : start ? 'Added to the belief base' : 'Removed from the belief base'
     case 'message':
       return start ? 'Sent' : 'Discarded'
     case 'event':
-      return start ? 'Triggered' : 'Ended'
+      return loaded ? 'Triggered by the program load' : start ? 'Triggered' : 'Ended'
     case 'intention':
       return start ? 'Created' : 'Finished'
     case 'intendedMeans':
-      return start ? 'Plan chosen and started' : 'Plan finished'
+      return start ? 'Started: a plan was chosen for this goal' : 'Finished: its plan ended'
     case 'plan':
-      return start ? 'Added to the plan library' : 'Removed from the plan library'
+      return loaded ? 'Loaded with the program' : start ? 'Added to the plan library' : 'Removed from the plan library'
     default:
       return start ? 'Started' : 'Ended'
   }
+}
+
+const sameMoment = (a: LifecycleEntry, b: LifecycleEntry) =>
+  a.moment.cycle === b.moment.cycle && a.moment.iteration === b.moment.iteration && a.moment.step === b.moment.step && a.moment.ordinal === b.moment.ordinal
+
+/**
+ * Entrada de contabilidade que só repete outra do mesmo momento e da mesma entidade, e por isso não aparece na lista:
+ * o evento `state` selecionado (o `place` já diz), a intenção que sai da fila quando passa a esperar (a espera já diz) e a
+ * que deixa de esperar quando volta à fila (a volta já diz).
+ */
+export function isRedundant(e: LifecycleEntry, all: readonly LifecycleEntry[]): boolean {
+  if (e.kind !== 'CHANGE' && e.kind !== 'MODIFIES') return false
+  const value = e.value ?? ''
+  const mates = all.filter((o) => o !== e && sameMoment(o, e) && (o.entity?.id ?? '') === (e.entity?.id ?? '') && (o.kind === 'CHANGE' || o.kind === 'MODIFIES'))
+  if (e.timeline === 'state' && value === 'SELECTED') return mates.some((o) => o.timeline === 'place' && o.value === 'SELECTED')
+  if (e.timeline === 'place' && value === 'NONE') return mates.some((o) => o.timeline === 'waitingOn' && !!o.value && o.value !== 'null')
+  if (e.timeline === 'waitingOn' && (!value || value === 'null')) return mates.some((o) => o.timeline === 'place' && o.value === 'RUNNING')
+  return false
+}
+
+/** O rótulo da linha que mostra a entidade para a qual o valor aponta: o que a intenção espera ou o objetivo que empilhou. */
+export function valueEntityLabel(e: LifecycleEntry): string | null {
+  if (!e.valueEntity) return null
+  if (e.timeline === 'waitingOn') return 'waiting on'
+  if (e.timeline === 'stack') return 'pushed'
+  return 'now'
 }
 
 /** O título da entrada: o que aconteceu, com os dados da própria ocorrência. `ownerType` é o tipo da entidade da janela. */

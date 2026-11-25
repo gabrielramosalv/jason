@@ -30,6 +30,8 @@ export interface LifecycleEntry {
   cause: LifecycleCause | null
   entity: EntityLabel | null
   into: EntityLabel | null
+  /** A entidade para a qual o valor novo aponta (o evento que a intenção espera, o objetivo empilhado). */
+  valueEntity?: EntityLabel | null
 }
 
 export interface LifecycleResponse {

@@ -143,16 +143,8 @@ export const TOUR_STEPS: TourStep[] = [
   {
     stage: "Source code",
     title: "Running intentions",
-    text: "One chip per intention in this cycle: executing, waiting or a subgoal in its stack. Click a chip to jump to the line it is at.",
+    text: "One chip per intention in this cycle (Intention and its number): executing or waiting. Click a chip to jump to the line it is at.",
     target: ".mi-runbar",
-    ensure: [],
-    side: "bottom",
-  },
-  {
-    stage: "Source code",
-    title: "Subgoal chain",
-    text: "Expands or collapses the subgoals stacked on top of an intention (for example +!entregar calling +!ir_ate).",
-    target: ".mi-subtog",
     ensure: [],
     side: "bottom",
   },
@@ -215,7 +207,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     stage: "Intentions",
     title: "Intention card",
-    text: "An intention with its id (#12), the plan that is running and its subgoal stack. The highlighted row is the step being executed.",
+    text: "An intention with its id (#12) and the goals of its stack, top first: the goal that is running, the ones it waits for and, last, the goal that started the intention.",
     target: "[data-k=\"int\"] .mi-bchip",
     ensure: [],
     side: "bottom",
@@ -231,7 +223,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     stage: "Events",
     title: "Selected and pending",
-    text: "Selected in this cycle shows the event the agent picked and what became of it: a new intention, a subgoal on an existing intention, a failure, or nothing. Pending lists the queue in the order of selection (the number on the left).",
+    text: "Selected in this cycle shows the event the agent picked and what became of it: a new intention, a new goal on an existing intention, a failure, or nothing. Pending lists the queue in the order of selection (the number on the left).",
     target: "[data-k=\"ev\"] .mi-sechead",
     ensure: [],
     side: "bottom",
@@ -247,7 +239,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     stage: "Beliefs",
     title: "Beliefs",
-    text: "The agent's belief base at this cycle, split by where each belief came from. A chip with a green + was added in this cycle, and a grey struck-through one was removed in this cycle; in any other cycle a belief is a plain chip.",
+    text: "The agent's belief base at this cycle, split by where each belief came from. A chip with a green + was added in this cycle, and one with a - marker was removed in this cycle; in any other cycle a belief is a plain chip.",
     target: "[data-k=\"bel\"]",
     ensure: ["show:bel"],
     side: "left",

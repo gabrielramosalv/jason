@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CONCEPT_COLORS, CONCEPT_ICON, conceptOf } from '@/shared/domain/entities'
+import { CONCEPT_COLORS, CONCEPT_ICON, chipText, conceptOf } from '@/shared/domain/entities'
+import type { ConceptKind } from '@/shared/domain/entities'
+import { useInspectorStore } from '@/stores/inspector.store'
 import { Icon } from '@/shared/ui'
 import { useLifecycleStore } from '@/stores/lifecycle.store'
 import { useSessionStore } from '@/stores/session.store'
@@ -18,17 +20,21 @@ const props = defineProps<{
   idBadge?: string | number | null
   selected?: boolean
   static?: boolean
+  /** Força o conceito do chip (o objetivo que abriu a intenção ou um subobjetivo). */
+  kind?: ConceptKind
 }>()
 
 const lifecycle = useLifecycleStore()
 const session = useSessionStore()
-const kind = computed(() => conceptOf(props.type))
+const inspector = useInspectorStore()
+const kind = computed<ConceptKind>(() => props.kind ?? (props.type === 'intendedMeans' ? inspector.goalKindOf(props.id) : conceptOf(props.type)))
 const colors = computed(() => CONCEPT_COLORS[kind.value])
+const text = computed(() => chipText(props.type, props.label))
 const clickable = computed(() => !props.static && !!props.id && kind.value !== 'plan')
 
 function open(ev: MouseEvent) {
   if (!clickable.value || !props.id || !session.selectedAgent) return
-  lifecycle.open({ agent: session.selectedAgent, id: props.id, type: props.type, label: props.label }, { x: ev.clientX, y: ev.clientY })
+  lifecycle.open({ agent: session.selectedAgent, id: props.id, type: props.type, label: text.value }, { x: ev.clientX, y: ev.clientY })
 }
 </script>
 
@@ -36,12 +42,13 @@ function open(ev: MouseEvent) {
   <button type="button" class="mi-belief" :title="clickable ? 'Life cycle of this ' + kind : label" :style="!clickable && { cursor: 'default' }" @click="open">
     <span
       class="mi-bchip"
-      :style="{ background: change === 'removed' ? 'var(--chip-idle-bg)' : colors.bg, color: change === 'removed' ? 'var(--c-8a8f99)' : colors.fg, textDecoration: change === 'removed' ? 'line-through' : 'none', ...(icon || idBadge != null ? { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)' } : {}), boxShadow: selected ? '0 0 0 2px var(--c-4338ca)' : undefined }"
+      :style="{ background: colors.bg, color: colors.fg, ...(icon || idBadge != null ? { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)' } : {}), boxShadow: selected ? '0 0 0 2px var(--c-4338ca)' : undefined }"
     >
       <Icon v-if="icon" :name="CONCEPT_ICON[kind]" />
-      <span>{{ label }}</span>
+      <span>{{ text }}</span>
       <span v-if="idBadge != null" style="opacity: 0.7">#{{ idBadge }}</span>
     </span>
     <span v-if="change === 'new'" class="mi-new" role="img" aria-label="new" title="new"><Icon name="badge-new" /></span>
+    <span v-else-if="change === 'removed'" class="mi-new" role="img" aria-label="removed" title="removed"><Icon name="badge-removed" /></span>
   </button>
 </template>

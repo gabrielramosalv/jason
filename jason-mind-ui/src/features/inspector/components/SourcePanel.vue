@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import EntityChip from '@/shared/components/EntityChip.vue'
 import { numericId } from '@/shared/domain/ids'
+import { planText } from '@/features/reasoning/domain/plan-text'
 import { Icon } from '@/shared/ui'
 import { useInspectorStore } from '@/stores/inspector.store'
 import { useLayoutStore } from '@/stores/layout.store'
 import { useSearchStore } from '@/stores/search.store'
+import { useUiStore } from '@/stores/ui.store'
 import { useProgram } from '../composables/useProgram'
 import { intentionCategory } from '../domain/intention-category'
 import { TOKEN_COLOR, tokenize } from '../domain/asl-tokens'
@@ -14,6 +17,7 @@ import type { IconName } from '@/shared/ui'
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
 const search = useSearchStore()
+const ui = useUiStore()
 const { files, plans } = useProgram()
 
 const activeFile = ref<string | null>(null)
@@ -70,7 +74,9 @@ const ghost = computed(() => (highlight.value?.bindings.length ? '// ' + highlig
 
 const categoryIcon: Record<string, IconName> = { executing: 'cat-executing', environment: 'cat-environment', waiting: 'cat-waiting', queue: 'cat-queue', suspended: 'cat-suspended' }
 
+/** A lupa abre a caixa de busca já com a deed escolhida; uma deed só, sem os filtros de tipo. */
 function onLens(line: number) {
+  ui.searchOpen = true
   const items = deedsByLine.value.get(line) ?? []
   const [first] = items
   if (items.length === 1 && first) {
@@ -80,6 +86,7 @@ function onLens(line: number) {
 }
 function pick(item: { plan: string; index: number; content: string }) {
   deedMenu.value = null
+  ui.searchOpen = true
   void search.runDeed(item.plan, item.index, item.content)
 }
 
@@ -105,7 +112,7 @@ function startVarsResize(e: PointerEvent) {
   <div v-if="intentions.length" class="mi-runbar">
     <div class="mi-runbar-in">
       <button v-for="i in intentions" :key="i.id" type="button" class="mi-bchip" :title="`${i.state.toLowerCase().replace(/_/g, ' ')}`" :aria-pressed="i.id === focused?.id" :style="{ flexShrink: 0, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)', color: 'var(--c-6d3aa6)', background: 'var(--c-e4d3f7)', boxShadow: `inset 0 0 0 1px ${i.id === focused?.id ? 'var(--c-6d3aa6)' : 'var(--ov-08)'}` }" @click="inspector.selectIntention(i.id)">
-        <Icon name="chip-intention" /><span>{{ i.levels[0]?.trigger }}</span>
+        <Icon name="chip-intention" /><span>Intention</span>
         <span class="mi-pill" style="background: var(--ov-08); color: var(--c-6d3aa6)">#{{ numericId(i.id) }}</span>
         <span style="display: inline-flex" :title="intentionCategory(i)"><Icon :name="categoryIcon[intentionCategory(i)]!" /></span>
       </button>
@@ -115,7 +122,7 @@ function startVarsResize(e: PointerEvent) {
     <div ref="editor" class="mi-editor">
       <p v-if="!current" class="mi-empty">No source code loaded</p>
       <div v-for="(text, i) in lines" :key="i" class="mi-eline" :data-ln="i + 1" :data-cur="isCurrent(i + 1)" :style="isCurrent(i + 1) ? { background: 'var(--c-e4d3f7)', boxShadow: 'inset 3px 0 0 var(--c-6d3aa6)' } : undefined">
-        <button v-if="deedsByLine.has(i + 1)" type="button" class="mi-egut" title="Search the cycles where this line was current" aria-label="Search the cycles where this line was current" @click="onLens(i + 1)"><span class="mi-ebp-h" style="opacity: 0.55; background: none; color: var(--c-8a8f99)"><Icon name="search-small" :size="11" /></span></button>
+        <button v-if="deedsByLine.has(i + 1)" type="button" class="mi-egut" title="Search the cycles where this line was current" aria-label="Search the cycles where this line was current" @click="onLens(i + 1)"><Icon name="search-small" :size="11" /></button>
         <span v-else class="mi-egut" />
         <span class="mi-enum" :style="{ color: isCurrent(i + 1) ? 'var(--c-6d3aa6)' : 'var(--c-8a8f99)' }">{{ i + 1 }}</span>
         <span class="mi-ecode"><span v-for="(tk, k) in tokenize(text)" :key="k" :style="{ color: TOKEN_COLOR[tk.kind] }">{{ tk.text }}</span></span>
@@ -133,7 +140,7 @@ function startVarsResize(e: PointerEvent) {
           <button type="button" class="mi-btn mi-icon mi-x" title="Minimize variables" aria-label="Minimize variables" @click="varsOpen = false"><Icon name="hide" /></button>
         </div>
         <template v-for="(lv, n) in levels" :key="lv.level.intendedMeansId">
-          <div v-if="lv.im?.bindings.length" class="mi-vgroup">{{ lv.level.trigger }}</div>
+          <div v-if="lv.im?.bindings.length" class="mi-vgroup"><EntityChip type="plan" :id="lv.plan?.id ?? lv.level.intendedMeansId" :label="lv.plan ? planText(lv.plan) : lv.level.trigger" icon /></div>
           <div v-for="b in lv.im?.bindings ?? []" :key="`${n}-${b.name}`" class="mi-vrow"><span class="mi-vk">{{ b.name }}</span><span class="mi-vv">{{ b.value }}</span></div>
         </template>
         <p v-if="!levels.some((l) => l.im?.bindings.length)" class="mi-empty">No variables bound</p>

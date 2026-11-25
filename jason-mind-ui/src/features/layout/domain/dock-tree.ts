@@ -27,7 +27,7 @@ export const PANEL_KEYS: PanelKey[] = ['code', 'int', 'ev', 'bel', 'console', 'm
 export function defaultTree(): DockNode {
   return {
     o: 'v',
-    w: [60, 40],
+    w: [38, 62],
     ch: [
       { o: 'h', w: [11, 5, 5], ch: [{ k: 'code' }, { k: 'int', t: ['int', 'ev'] }, { k: 'bel' }] },
       { k: 'console', t: ['console', 'msgs', 'reason'] },

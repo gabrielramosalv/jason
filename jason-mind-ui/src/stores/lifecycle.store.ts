@@ -14,12 +14,23 @@ export interface LifecycleHighlight {
   step: string
   iteration: number
   ordinal: number
+  /** O tipo da ocorrência pedida (nasce, muda ou termina), para distinguir as da mesma entidade no mesmo passo. */
+  kind?: string | null
+}
+
+/** A ocorrência selecionada numa janela de Life cycle: o Reasoning a destaca enquanto ela valer. */
+export interface LifecycleFocus extends LifecycleHighlight {
+  /** Chave da janela que escolheu. */
+  key: string
+  entityId: string
+  /** Sobe a cada escolha, para o Reasoning aplicar a iteração e a ocorrência uma vez só. */
+  token: number
 }
 
 export interface LifecycleWindow extends LifecycleTarget {
   key: string
   highlight: LifecycleHighlight | null
-  /** Sobe a cada pedido de destaque, para a janela já aberta piscar de novo. */
+  /** Sobe a cada pedido, para a janela já aberta selecionar de novo o momento pedido. */
   flash: number
   x: number
   y: number
@@ -31,6 +42,11 @@ export interface LifecycleWindow extends LifecycleTarget {
 /** Janelas de Life cycle abertas (D-080): cada chip clicado abre uma, que se arrasta e se redimensiona. */
 export const useLifecycleStore = defineStore('lifecycle', () => {
   const windows = ref<LifecycleWindow[]>([])
+  const focus = ref<LifecycleFocus | null>(null)
+  let tokens = 0
+  function setFocus(key: string, entityId: string, moment: LifecycleHighlight) {
+    focus.value = { key, entityId, cycle: moment.cycle, step: moment.step, iteration: moment.iteration, ordinal: moment.ordinal, kind: moment.kind ?? null, token: ++tokens }
+  }
   let top = 40
 
   /** Abre a janela perto de onde o chip foi clicado (`at`), ou raise se a entidade já tem janela. */
@@ -39,10 +55,8 @@ export const useLifecycleStore = defineStore('lifecycle', () => {
     const existing = windows.value.find((w) => w.key === key)
     if (existing) {
       existing.z = ++top
-      if (highlight) {
-        existing.highlight = highlight
-        existing.flash++
-      }
+      existing.highlight = highlight
+      existing.flash++
       return
     }
     const n = windows.value.length
@@ -53,14 +67,16 @@ export const useLifecycleStore = defineStore('lifecycle', () => {
   }
   function close(key: string) {
     windows.value = windows.value.filter((w) => w.key !== key)
+    if (focus.value?.key === key) focus.value = null
   }
   function closeAll() {
     windows.value = []
+    focus.value = null
   }
   function raise(key: string) {
     const w = windows.value.find((x) => x.key === key)
     if (w) w.z = ++top
   }
 
-  return { windows, open, close, closeAll, raise }
+  return { windows, focus, setFocus, open, close, closeAll, raise }
 })
