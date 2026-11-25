@@ -2,6 +2,7 @@ package jason.mind.api.core.domain.service.reasoning;
 
 import jason.mind.api.core.domain.model.entities.Event;
 import jason.mind.api.core.domain.model.entities.Intention;
+import jason.mind.api.core.domain.model.entities.Message;
 import jason.mind.api.core.domain.model.entities.Plan;
 import jason.mind.api.core.domain.model.history.AgentConfig;
 import jason.mind.api.core.domain.model.program.Trigger;
@@ -97,6 +98,34 @@ public final class CandidatesDomainService {
             candidates.add(new Candidate(chosen, null, true, null));
         }
         return new StepCandidates(new ArrayList<>(queueBefore), chosen, candidates);
+    }
+
+    /**
+     * Lists the candidates of the message selection: Jason takes one message of the mailbox per cycle.
+     *
+     * @param mailboxBefore mailbox before the selection, oldest first
+     * @param chosen        message read, or null
+     * @param config        configuration of the agent
+     * @return mailbox as inputs, the chosen message and a candidate per message, including a chosen message
+     * outside the mailbox
+     */
+    public StepCandidates selectMessage(List<Message> mailboxBefore, Message chosen, AgentConfig config) {
+        List<Candidate> candidates = new ArrayList<>();
+        for (Message m : mailboxBefore) {
+            SelectionRule rule = null;
+            if (m == chosen) {
+                if (!config.selectMessageDefault()) {
+                    rule = SelectionRule.SELECT_MESSAGE_CUSTOM;
+                } else if (mailboxBefore.get(0) == m) {
+                    rule = SelectionRule.SELECT_MESSAGE_FIFO;
+                }
+            }
+            candidates.add(new Candidate(m, rule, m == chosen, null));
+        }
+        if (chosen != null && !mailboxBefore.contains(chosen)) {
+            candidates.add(new Candidate(chosen, null, true, null));
+        }
+        return new StepCandidates(new ArrayList<>(mailboxBefore), chosen, candidates);
     }
 
     /**

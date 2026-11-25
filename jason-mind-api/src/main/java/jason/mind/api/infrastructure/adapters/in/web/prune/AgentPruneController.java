@@ -34,7 +34,7 @@ public class AgentPruneController {
      */
     @Mapping(value = "/{name}/prune", method = HttpMethod.POST)
     public Response prune(Request request) {
-        return WebExchange.handle("agentPrune", () -> Responses.mount(HttpResponseCode.ACCEPTED,
+        return WebExchange.write("agentPrune", request, () -> Responses.mount(HttpResponseCode.ACCEPTED,
                 this.requestPrune.execute(
                         new RequestPruneIn(request.getPathVariable("name"), WebExchange.integer(request, "until"))),
                 HttpContentType.JSON));

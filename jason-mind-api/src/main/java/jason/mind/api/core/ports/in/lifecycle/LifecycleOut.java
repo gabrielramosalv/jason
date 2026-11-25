@@ -26,9 +26,10 @@ public record LifecycleOut(String id, String type, String label, List<EntryOut> 
      * @param cause    cause of the entry, or null
      * @param entity   entity related to the entry, or null
      * @param into     entity the entry leads into, or null
+     * @param valueEntity entity the new value points to (the event an intention waits for, the goal pushed on the stack), or null
      */
     public record EntryOut(long sequence, String kind, String code, String timeline, String value, MomentOut moment,
-                           CauseOut cause, EntityOut entity, EntityOut into) {
+                           CauseOut cause, EntityOut entity, EntityOut into, EntityOut valueEntity) {
 
     }
 

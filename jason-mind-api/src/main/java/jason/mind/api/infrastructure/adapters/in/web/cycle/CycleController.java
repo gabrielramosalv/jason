@@ -41,7 +41,8 @@ public class CycleController {
             CyclesOut out = this.listCycles.execute(
                     new ListCyclesIn(request.getPathVariable("name"), WebExchange.integer(request, "from"),
                             WebExchange.integer(request, "to")));
-            return WebExchange.withETag(request, out.from() + "-" + out.to(), () -> out);
+            return WebExchange.withETag(request, out.from() + "-" + out.to() + ":" + out.oldestCycle() + "." + out.newestCycle() + ":"
+                    + Integer.toHexString(out.cycles().hashCode()), () -> out);
         });
     }
 

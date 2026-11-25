@@ -27,6 +27,9 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class ListConsoleLinesUseCase implements ListConsoleLinesPort {
 
+    /** Largest page a client may ask for; bounds the size of one response. */
+    public static final int MAX_LIMIT = 1000;
+
     /** Repository that holds the console lines. */
     private final ConsoleRepositoryPort consoleRepository;
 
@@ -37,6 +40,9 @@ public class ListConsoleLinesUseCase implements ListConsoleLinesPort {
     public ConsoleOut execute(ListConsoleLinesIn in) {
         if (in.limit() == null || in.limit() < 1) {
             throw new InvalidQueryException("limit is required and must be positive");
+        }
+        if (in.limit() > MAX_LIMIT) {
+            throw new InvalidQueryException("limit must be at most " + MAX_LIMIT);
         }
         if (in.after() != null && in.before() != null) {
             throw new InvalidQueryException("after and before are exclusive");

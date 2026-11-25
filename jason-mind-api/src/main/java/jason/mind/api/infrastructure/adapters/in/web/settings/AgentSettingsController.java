@@ -32,7 +32,7 @@ public class AgentSettingsController {
      */
     @Mapping(value = "/{name}/settings", method = HttpMethod.PUT)
     public Response update(Request request) {
-        return WebExchange.handle("agentSettingsUpdate", () -> {
+        return WebExchange.write("agentSettingsUpdate", request, () -> {
             AgentSettingsRequest body;
             try {
                 body = request.getBodyAs(AgentSettingsRequest.class);
@@ -55,7 +55,7 @@ public class AgentSettingsController {
      */
     @Mapping(value = "/{name}/settings", method = HttpMethod.DELETE)
     public Response reset(Request request) {
-        return WebExchange.handle("agentSettingsReset", () -> Responses.ok(
+        return WebExchange.write("agentSettingsReset", request, () -> Responses.ok(
                 this.updateAgentSettings.execute(new UpdateAgentSettingsIn(request.getPathVariable("name"), null))));
     }
 

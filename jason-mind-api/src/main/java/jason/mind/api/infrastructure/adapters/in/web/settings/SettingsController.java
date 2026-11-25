@@ -46,7 +46,7 @@ public class SettingsController {
      */
     @Mapping(method = HttpMethod.PUT)
     public Response update(Request request) {
-        return WebExchange.handle("settingsUpdate", () -> {
+        return WebExchange.write("settingsUpdate", request, () -> {
             SettingsRequest body;
             try {
                 body = request.getBodyAs(SettingsRequest.class);

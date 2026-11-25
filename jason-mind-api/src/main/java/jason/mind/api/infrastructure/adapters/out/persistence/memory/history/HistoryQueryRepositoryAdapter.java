@@ -3,6 +3,7 @@ package jason.mind.api.infrastructure.adapters.out.persistence.memory.history;
 import jason.mind.api.core.domain.model.entities.Event;
 import jason.mind.api.core.domain.model.entities.IntendedMeans;
 import jason.mind.api.core.domain.model.entities.Message;
+import jason.mind.api.core.domain.model.timeline.Cause;
 import jason.mind.api.core.domain.model.entities.Plan;
 import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
@@ -273,9 +274,19 @@ public class HistoryQueryRepositoryAdapter implements HistoryQueryRepositoryPort
             long cut = cut(s);
             int from = s.lastScanHorizon;
             String name = s.agent.getName();
-            for (OccurrenceRecord rec : entity.getEffects()) {
-                Occurrence o = rec.occurrence();
-                if (o.sequence() <= cut && o.cycle() >= from && o.agent().equals(name)) {
+            // derived from the entities: every occurrence of the store whose cause is the entity (D-084)
+            List<OccurrenceRecord> all = new ArrayList<>();
+            for (Entity e : s.entities.values()) {
+                collect(e, name, from, Integer.MAX_VALUE, false, cut, all);
+            }
+            for (Message m : s.incoming.values()) {
+                if (s.entities.get(m.getId()) != m) {
+                    collect(m, name, from, Integer.MAX_VALUE, false, cut, all);
+                }
+            }
+            for (OccurrenceRecord rec : all) {
+                Cause c = rec.occurrence().cause();
+                if (c != null && c.by() == entity) {
                     r.add(rec);
                 }
             }

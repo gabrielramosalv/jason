@@ -1,5 +1,6 @@
 package jason.mind.api.core.application.capture;
 
+import jason.mind.api.core.domain.model.entities.IntendedMeans;
 import jason.mind.api.core.domain.model.entities.Intention;
 import jason.mind.api.core.domain.model.entities.Plan;
 import jason.mind.api.core.domain.model.timeline.Cause;
@@ -36,6 +37,10 @@ final class CauseResolver {
             return null;
         }
         Entity by = this.entity(agent, in.byId());
+        if (by instanceof IntendedMeans goal && in.planId() != null) {
+            Plan plan = (Plan) this.entity(agent, in.planId());
+            return Cause.byGoal(goal, new CodeLocation(plan, in.deedIndex()));
+        }
         if (by instanceof Intention intention && in.planId() != null) {
             Plan plan = (Plan) this.entity(agent, in.planId());
             return Cause.byIntention(intention, new CodeLocation(plan, in.deedIndex()));

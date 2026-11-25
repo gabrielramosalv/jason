@@ -134,7 +134,7 @@ public record MindApiModule(List<Object> controllers, JasonCaptureRegistry captu
         List<Object> controllers = List.of(new MasController(new FindMasUseCase(historyQuery, mas, MIND_VERSION, jasonVersion)),
                 new AgentStateController(new FindAgentStateUseCase(historyQuery, queue)),
                 new CycleController(new ListCyclesUseCase(historyQuery),
-                        new FindCycleReasoningUseCase(historyQuery, new CandidatesDomainService(), queue)),
+                        new FindCycleReasoningUseCase(historyQuery, new CandidatesDomainService(), queue, new EffectsDomainService())),
                 new LifecycleController(new FindEntityLifecycleUseCase(historyQuery, new EffectsDomainService())),
                 new MessageController(new ListMessagesUseCase(historyQuery)),
                 new ConsoleController(new ListConsoleLinesUseCase(console, historyQuery)),

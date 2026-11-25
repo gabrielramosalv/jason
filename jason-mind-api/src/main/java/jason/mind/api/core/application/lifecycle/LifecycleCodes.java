@@ -37,6 +37,11 @@ final class LifecycleCodes {
      * @param effects effects caused by the entity, used to classify the end of an event
      * @return the lifecycle code, or {@code null} when the occurrence has no code
      */
+    /** Quem executa uma deed: o objetivo do topo da pilha ou, sem ele rastreado, a intenção. */
+    private static boolean isDoer(Entity by) {
+        return by instanceof IntendedMeans || by instanceof Intention;
+    }
+
     static String describeOwn(Entity e, OccurrenceRecord r, List<Effect> effects) {
         Entity by = r.occurrence().cause() == null ? null : r.occurrence().cause().by();
         ReasoningStep step = r.occurrence().moment().step();
@@ -48,7 +53,7 @@ final class LifecycleCodes {
                 if (by instanceof Message) {
                     return "BELIEF_ADDED_BY_MESSAGE";
                 }
-                if (by instanceof Intention) {
+                if (isDoer(by)) {
                     return "BELIEF_ADDED_BY_INTENTION";
                 }
                 return null;
@@ -57,7 +62,7 @@ final class LifecycleCodes {
                 if (by == null && step == ReasoningStep.PERCEIVE) {
                     return "BELIEF_REMOVED_BY_ENVIRONMENT";
                 }
-                if (by instanceof Intention) {
+                if (isDoer(by)) {
                     return "BELIEF_REMOVED_BY_INTENTION";
                 }
                 return null;
@@ -172,7 +177,7 @@ final class LifecycleCodes {
                 if (by instanceof Message) {
                     return "EVENT_TRIGGERED_BY_MESSAGE";
                 }
-                if (by instanceof Intention) {
+                if (isDoer(by)) {
                     return "EVENT_TRIGGERED_BY_INTENTION";
                 }
                 if (by instanceof Event) {

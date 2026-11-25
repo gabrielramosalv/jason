@@ -17,7 +17,7 @@ import java.util.TreeSet;
 
 /**
  * Controller that exposes the mental state of an agent at a given cycle.
- * Answers with the requested parts of the state and an ETag built from the cycle and the included parts.
+ * Answers with the requested parts of the state and an ETag built from the cycle, the cycle range, the sequence and the included parts.
  *
  * @author Gabriel Lima
  */
@@ -79,7 +79,8 @@ public class AgentStateController {
             if (out.events() != null) {
                 parts.add("events");
             }
-            String etag = out.cycle() + ":" + String.join(",", parts);
+            String etag = out.cycle() + ":" + out.oldestCycle() + "." + out.newestCycle() + "." + out.sequenceEnd() + ":"
+                    + out.clamped() + ":" + String.join(",", parts);
             return WebExchange.withETag(request, etag, () -> body(out));
         });
     }

@@ -4,7 +4,6 @@ import jason.mind.api.core.domain.model.entities.Message;
 import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.domain.model.history.OccurrenceRecord;
-import jason.mind.api.core.domain.model.timeline.Cause;
 import jason.mind.api.core.domain.model.timeline.Entity;
 import jason.mind.api.core.domain.model.trace.PlanSelection;
 import jason.mind.api.core.ports.out.history.HistoryRepositoryPort;
@@ -90,10 +89,6 @@ public class HistoryRepositoryAdapter implements HistoryRepositoryPort {
     @Override
     public void appendOccurrence(String agentName, OccurrenceRecord record) {
         requireStore(agentName);
-        Cause cause = record.occurrence().cause();
-        if (cause != null) {
-            cause.by().addEffect(record);
-        }
     }
 
     @Override

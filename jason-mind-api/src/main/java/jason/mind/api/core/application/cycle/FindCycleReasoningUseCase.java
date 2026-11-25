@@ -4,10 +4,12 @@ import jason.mind.api.core.application.history.CycleNotFoundException;
 import jason.mind.api.core.application.history.CyclePrunedException;
 import jason.mind.api.core.application.history.EntityIds;
 import jason.mind.api.core.application.history.HistoryView;
+import jason.mind.api.core.application.history.SubgoalOwners;
 import jason.mind.api.core.domain.model.entities.Binding;
 import jason.mind.api.core.domain.model.entities.Event;
 import jason.mind.api.core.domain.model.entities.IntendedMeans;
 import jason.mind.api.core.domain.model.entities.Intention;
+import jason.mind.api.core.domain.model.entities.Message;
 import jason.mind.api.core.domain.model.entities.Plan;
 import jason.mind.api.core.domain.model.history.Agent;
 import jason.mind.api.core.domain.model.history.CycleRecord;
@@ -18,6 +20,8 @@ import jason.mind.api.core.domain.model.timeline.Moment;
 import jason.mind.api.core.domain.model.timeline.ReasoningStep;
 import jason.mind.api.core.domain.model.trace.PlanSelection;
 import jason.mind.api.core.domain.model.trace.TermEvaluation;
+import jason.mind.api.core.domain.model.history.Effect;
+import jason.mind.api.core.domain.service.history.EffectsDomainService;
 import jason.mind.api.core.domain.service.reasoning.Candidate;
 import jason.mind.api.core.domain.service.reasoning.CandidatesDomainService;
 import jason.mind.api.core.domain.service.reasoning.QueueDomainService;
@@ -31,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -53,6 +58,9 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
 
     /** Domain service that orders the event and intention queues. */
     private final QueueDomainService queue;
+
+    /** Domain service that derives what entities did to other entities, the same rule the lifecycle uses. */
+    private final EffectsDomainService effects;
 
     /**
      * Finds the entity whose timeline was changed to a given value in a step.
@@ -109,27 +117,76 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
     }
 
     /**
-     * Builds the output of a step with its inputs, candidates, choice and the entities it created,
-     * changed and removed. Context term evaluations are included only for the option search step.
+     * Derives what the entities of a step did to other entities in it, by the same rule as the lifecycle:
+     * effects on intended means count only when the intended means is a subgoal.
+     *
+     * @param records   occurrences of the step
+     * @param effectsOf domain service that derives the effects of an entity
+     * @param owners    owner intention of each intended means
+     * @return the effects of the step, in occurrence order
+     */
+    private static List<CycleReasoningOut.EffectOut> effectsIn(List<OccurrenceRecord> records,
+                                                               EffectsDomainService effectsOf, SubgoalOwners owners) {
+        Map<Entity, Boolean> causes = new IdentityHashMap<>();
+        for (OccurrenceRecord r : records) {
+            if (r.occurrence().cause() != null) {
+                causes.put(r.occurrence().cause().by(), Boolean.TRUE);
+            }
+        }
+        Map<Long, CycleReasoningOut.EffectOut> bySequence = new TreeMap<>();
+        for (Entity by : causes.keySet()) {
+            for (Effect f : effectsOf.effectsOf(by, records)) {
+                if (f.entity() instanceof IntendedMeans im && !owners.isSubgoal(im)) {
+                    continue;
+                }
+                String kind = switch (f.kind()) {
+                    case START -> "GENERATES";
+                    case CHANGE -> "MODIFIES";
+                    case END -> "REMOVES";
+                };
+                bySequence.put(f.sequence(),
+                        new CycleReasoningOut.EffectOut(kind, EntityIds.format(by), HistoryView.ref(f.entity()), f.sequence()));
+            }
+        }
+        return new ArrayList<>(bySequence.values());
+    }
+
+    /**
+     * Describes the entity of an occurrence together with the sequence of the occurrence.
+     *
+     * @param r occurrence of the entity
+     * @return entity reference with the sequence
+     */
+    private static CycleReasoningOut.OccurrenceOut occurrenceOf(OccurrenceRecord r) {
+        return new CycleReasoningOut.OccurrenceOut(r.entity().typeName(), EntityIds.format(r.entity()), r.entity().label(),
+                r.sequence());
+    }
+
+    /**
+     * Builds the output of a step with its inputs, candidates, choice, the entities it created,
+     * changed and removed, and the effects some entities had on others. Context term evaluations are included only for the option search step.
      *
      * @param key          key of the step
      * @param searchMethod plan search method used, or {@code null} when not applicable
      * @param sc           inputs, candidates and choice of the step
      * @param records      occurrences of the step
+     * @param effectsOf    domain service that derives the effects of an entity
+     * @param owners       owner intention of each intended means, to tell subgoals apart
      * @return the output of the step
      */
     private static CycleReasoningOut.StepOut buildStep(StepKey key, String searchMethod, StepCandidates sc,
-                                                  List<OccurrenceRecord> records) {
-        List<EntityRefOut> created = new ArrayList<>();
+                                                  List<OccurrenceRecord> records, EffectsDomainService effectsOf,
+                                                  SubgoalOwners owners) {
+        List<CycleReasoningOut.OccurrenceOut> created = new ArrayList<>();
         List<CycleReasoningOut.ChangeOut> changed = new ArrayList<>();
-        List<EntityRefOut> removed = new ArrayList<>();
+        List<CycleReasoningOut.OccurrenceOut> removed = new ArrayList<>();
         for (OccurrenceRecord r : records) {
             switch (r.kind()) {
-                case START, ARRIVAL -> created.add(HistoryView.ref(r.entity()));
-                case END -> removed.add(HistoryView.ref(r.entity()));
+                case START, ARRIVAL -> created.add(occurrenceOf(r));
+                case END -> removed.add(occurrenceOf(r));
                 case CHANGE -> changed.add(
                         new CycleReasoningOut.ChangeOut(r.entity().typeName(), EntityIds.format(r.entity()),
-                                r.entity().label(), r.timeline(), HistoryView.formatValue(r.value())));
+                                r.entity().label(), r.timeline(), HistoryView.formatValue(r.value()), r.sequence()));
             }
         }
         List<EntityRefOut> inputs = new ArrayList<>();
@@ -156,7 +213,7 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
                     c.chosen(), terms));
         }
         return new CycleReasoningOut.StepOut(key.step().name(), key.step().getPhase().name(), key.iteration(),
-                key.ordinal(), searchMethod, inputs, HistoryView.ref(sc.chosen()), cands, created, changed, removed);
+                key.ordinal(), searchMethod, inputs, HistoryView.ref(sc.chosen()), cands, created, changed, removed, effectsIn(records, effectsOf, owners));
     }
 
     @Override
@@ -192,6 +249,7 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
         List<Event> events = new ArrayList<>();
         List<Intention> intentions = new ArrayList<>();
         List<Plan> plans = new ArrayList<>();
+        List<Message> messages = new ArrayList<>();
         for (Entity e : entities) {
             if (e instanceof Event ev) {
                 events.add(ev);
@@ -199,10 +257,13 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
                 intentions.add(i);
             } else if (e instanceof Plan p) {
                 plans.add(p);
+            } else if (e instanceof Message m) {
+                messages.add(m);
             }
         }
         plans.sort(Comparator.comparingLong(Plan::getOrderKey));
 
+        SubgoalOwners owners = SubgoalOwners.of(this.historyQuery, in.agent());
         List<CycleReasoningOut.StepOut> steps = new ArrayList<>();
         List<Map.Entry<StepKey, List<OccurrenceRecord>>> entries = new ArrayList<>(byStep.entrySet());
         for (int idx = 0; idx < entries.size(); idx++) {
@@ -222,6 +283,18 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
                 case SELECT_EVENT -> {
                     Event chosen = (Event) findChangedTo(records, "place", Event.Place.SELECTED);
                     sc = this.candidates.selectEvent(this.queue.eventQueue(events, before), chosen, agent.getConfig());
+                }
+                case PROCESS_MESSAGES -> {
+                    Message chosen = null;
+                    for (OccurrenceRecord r : records) {
+                        if (r.kind() == OccurrenceRecord.Kind.END && r.entity() instanceof Message m
+                                && m.getReceiver().equals(in.agent())) {
+                            chosen = m;
+                            break;
+                        }
+                    }
+                    sc = this.candidates.selectMessage(this.queue.mailbox(messages, in.agent(), before), chosen,
+                            agent.getConfig());
                 }
                 case SELECT_INTENTION -> {
                     Intention chosen = (Intention) findChangedTo(records, "place", Intention.Place.SELECTED_INTENTION);
@@ -249,7 +322,15 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
                     for (Intention i : intentions) {
                         if (HistoryView.aliveAt(i, before) && i.getPlace().before(before + 1)
                                 == Intention.Place.SELECTED_INTENTION) {
-                            inputs.add(i);
+                            // quem executa é o objetivo do topo da pilha: ele é a entrada do passo
+                            IntendedMeans top = null;
+                            List<IntendedMeans> stack = i.getStack();
+                            for (int k = stack.size() - 1; k >= 0 && top == null; k--) {
+                                if (HistoryView.aliveAt(stack.get(k), before)) {
+                                    top = stack.get(k);
+                                }
+                            }
+                            inputs.add(top != null ? top : i);
                         }
                     }
                     sc = new StepCandidates(inputs, null, List.of());
@@ -257,7 +338,7 @@ public class FindCycleReasoningUseCase implements FindCycleReasoningPort {
                 default -> {
                 }
             }
-            steps.add(buildStep(key, searchMethod, sc, records));
+            steps.add(buildStep(key, searchMethod, sc, records, this.effects, owners));
         }
         return new CycleReasoningOut(in.agent(), in.cycle(), steps);
     }

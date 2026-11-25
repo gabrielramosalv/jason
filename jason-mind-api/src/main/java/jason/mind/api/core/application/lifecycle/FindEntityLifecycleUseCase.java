@@ -5,6 +5,7 @@ import jason.mind.api.core.application.history.EntityNotFoundException;
 import jason.mind.api.core.application.history.EntityPrunedException;
 import jason.mind.api.core.application.history.HistoryView;
 import jason.mind.api.core.application.history.InvalidQueryException;
+import jason.mind.api.core.application.history.SubgoalOwners;
 import jason.mind.api.core.domain.model.entities.IntendedMeans;
 import jason.mind.api.core.domain.model.entities.Intention;
 import jason.mind.api.core.domain.model.entities.Message;
@@ -23,10 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Use case that builds the lifecycle of an entity page by page.
@@ -46,35 +44,6 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
 
     /** Domain service that derives the effects caused by an entity. */
     private final EffectsDomainService effects;
-
-    /**
-     * Maps every intended means of an agent to the intention whose stack holds it.
-     *
-     * @param query read-only access to the history
-     * @param agent name of the agent
-     * @return the owner intention of each intended means, keyed by identity
-     */
-    private static Map<IntendedMeans, Intention> findOwners(HistoryQueryRepositoryPort query, String agent) {
-        Map<IntendedMeans, Intention> r = new IdentityHashMap<>();
-        for (Entity e : query.entitiesOfTypes(agent, Set.of("intention"))) {
-            for (IntendedMeans im : ((Intention) e).getStack()) {
-                r.put(im, (Intention) e);
-            }
-        }
-        return r;
-    }
-
-    /**
-     * Tells whether an intended means is a subgoal, meaning it is not the bottom of its intention's stack.
-     *
-     * @param im     intended means being checked
-     * @param owners owner intention of each intended means
-     * @return {@code true} if the intended means is a subgoal
-     */
-    private static boolean isSubgoal(IntendedMeans im, Map<IntendedMeans, Intention> owners) {
-        Intention owner = owners.get(im);
-        return owner != null && !owner.getStack().isEmpty() && owner.getStack().get(0) != im;
-    }
 
     /**
      * Builds the output of a moment.
@@ -161,6 +130,10 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
         if (limit < 1) {
             throw new InvalidQueryException("limit must be positive");
         }
+        boolean newestFirst = in.order() != null && "desc".equalsIgnoreCase(in.order().trim());
+        if (in.order() != null && !newestFirst && !"asc".equalsIgnoreCase(in.order().trim())) {
+            throw new InvalidQueryException("order must be asc or desc");
+        }
         Entity e = this.historyQuery.entityById(in.agent(), id).orElse(null);
         if (e == null) {
             if (this.historyQuery.wasPruned(in.agent(), id)) {
@@ -172,6 +145,7 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
             throw new EntityNotFoundException(in.agent(), in.id());
         }
 
+        // o Life cycle de uma entidade traz só o que é dela e o que ela mesma causou: o da intenção não herda o dos objetivos
         List<Effect> fx = new ArrayList<>();
         for (Effect f : this.effects.effectsOf(e, this.historyQuery.causedBy(in.agent(), e))) {
             if (this.isVisible(f.moment().agent(), f.sequence())) {
@@ -192,7 +166,8 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
             entries.add(new LifecycleOut.EntryOut(r.sequence(), kind, LifecycleCodes.describeOwn(e, r, fx),
                     r.kind() == OccurrenceRecord.Kind.CHANGE ? r.timeline() : null,
                     r.kind() == OccurrenceRecord.Kind.CHANGE ? HistoryView.formatValue(r.value()) : null,
-                    toMoment(r.occurrence().moment()), this.describeCause(r.occurrence().cause()), null, null));
+                    toMoment(r.occurrence().moment()), this.describeCause(r.occurrence().cause()), null, null,
+                    r.kind() == OccurrenceRecord.Kind.CHANGE && r.value() instanceof Entity ve ? entity(ve) : null));
         }
         if (e instanceof Intention intention) {
             List<IntendedMeans> stack = intention.getStack();
@@ -204,12 +179,12 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
                 }
                 entries.add(new LifecycleOut.EntryOut(im.getStart().sequence(), "CHANGE", "INTENTION_SUBGOAL_PUSHED",
                         "stack", EntityIds.format(im), toMoment(im.getStart().moment()),
-                        this.describeCause(im.getStart().cause()), null, null));
+                        this.describeCause(im.getStart().cause()), null, null, entity(im)));
             }
         }
-        Map<IntendedMeans, Intention> owners = findOwners(this.historyQuery, in.agent());
+        SubgoalOwners owners = SubgoalOwners.of(this.historyQuery, in.agent());
         for (Effect f : fx) {
-            if (f.entity() instanceof IntendedMeans im && !isSubgoal(im, owners)) {
+            if (f.entity() instanceof IntendedMeans im && !owners.isSubgoal(im)) {
                 continue;
             }
             String kind = switch (f.kind()) {
@@ -217,19 +192,22 @@ public class FindEntityLifecycleUseCase implements FindEntityLifecyclePort {
                 case CHANGE -> "MODIFIES";
                 case END -> "REMOVES";
             };
-            boolean subgoal = f.entity() instanceof IntendedMeans im && isSubgoal(im, owners);
-            LifecycleOut.EntityOut into = subgoal ? entity(owners.get((IntendedMeans) f.entity())) : null;
+            boolean subgoal = f.entity() instanceof IntendedMeans im && owners.isSubgoal(im);
+            LifecycleOut.EntityOut into = subgoal ? entity(owners.ownerOf((IntendedMeans) f.entity())) : null;
             entries.add(
                     new LifecycleOut.EntryOut(f.sequence(), kind, LifecycleCodes.describeEffect(e, f, subgoal), f.timeline(),
                             f.kind() == Effect.Kind.CHANGE ? HistoryView.formatValue(f.value()) : null,
-                            toMoment(f.moment()), null, entity(f.entity()), into));
+                            toMoment(f.moment()), null, entity(f.entity()), into,
+                            f.kind() == Effect.Kind.CHANGE && f.value() instanceof Entity ve ? entity(ve) : null));
         }
-        entries.sort(Comparator.comparingLong(LifecycleOut.EntryOut::sequence));
+        entries.sort(newestFirst ? Comparator.comparingLong(LifecycleOut.EntryOut::sequence).reversed()
+                : Comparator.comparingLong(LifecycleOut.EntryOut::sequence));
         long after = in.after() == null ? Long.MIN_VALUE : in.after();
+        long before = in.before() == null ? Long.MAX_VALUE : in.before();
         List<LifecycleOut.EntryOut> page = new ArrayList<>();
         Long next = null;
         for (LifecycleOut.EntryOut en : entries) {
-            if (en.sequence() <= after) {
+            if (newestFirst ? en.sequence() >= before : en.sequence() <= after) {
                 continue;
             }
             if (page.size() == limit) {

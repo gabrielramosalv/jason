@@ -34,7 +34,7 @@ public class PruneController {
      */
     @Mapping(method = HttpMethod.POST)
     public Response prune(Request request) {
-        return WebExchange.handle("prune", () -> Responses.mount(HttpResponseCode.ACCEPTED,
+        return WebExchange.write("prune", request, () -> Responses.mount(HttpResponseCode.ACCEPTED,
                 this.requestPrune.execute(new RequestPruneIn(null, WebExchange.integer(request, "until"))),
                 HttpContentType.JSON));
     }

@@ -153,21 +153,18 @@ final class AgentStore {
      */
     private Footprint count() {
         long entries = 0;
-        long effects = 0;
         long count = 0;
         for (Entity e : this.entities.values()) {
             count++;
             entries += entriesOf(e);
-            effects += e.getEffects().size();
         }
         for (Message m : this.incoming.values()) {
             if (this.entities.get(m.getId()) != m) {
                 count++;
                 entries += entriesOf(m);
-                effects += m.getEffects().size();
             }
         }
-        return new Footprint(count, entries, effects);
+        return new Footprint(count, entries, 0);
     }
 
     /**
@@ -220,7 +217,6 @@ final class AgentStore {
         if (e instanceof Event ev) {
             ev.pruneSelectionsBefore(h);
         }
-        e.pruneEffectsBefore(agent, h);
     }
 
     /**
@@ -232,7 +228,6 @@ final class AgentStore {
      * @param agent name of the agent whose caused occurrences are dropped
      */
     private static void releaseCaused(Entity e, String agent) {
-        e.pruneEffectsBefore(agent, Integer.MAX_VALUE);
         if (e instanceof Event ev) {
             ev.pruneSelectionsBefore(Integer.MAX_VALUE);
         }
@@ -360,7 +355,7 @@ final class AgentStore {
                 dead.add(m.getId());
                 releaseCaused(m, name);
             } else if (this.entities.get(m.getId()) != m) {
-                m.pruneEffectsBefore(name, h);
+                // nothing to trim: the occurrences a message caused live in the timelines of the entities they changed
             }
         }
         synchronized (this.pruned) {

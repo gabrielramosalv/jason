@@ -2,6 +2,7 @@ package jason.mind.api.core.domain.service.reasoning;
 
 import jason.mind.api.core.domain.model.entities.Event;
 import jason.mind.api.core.domain.model.entities.Intention;
+import jason.mind.api.core.domain.model.entities.Message;
 import jason.mind.api.core.domain.model.program.Trigger;
 import jason.mind.api.core.domain.model.timeline.TimelineEntry;
 
@@ -83,6 +84,28 @@ public final class QueueDomainService {
         queue.sort(Comparator.comparingInt((Event e) -> e.isAtomic() ? 0 : isMeta(e, sequenceCut) ? 1 : 2)
                 .thenComparingLong(e -> lastEntrySequence(e.getPlace().entries(), Event.Place.QUEUE, sequenceCut)));
         return queue;
+    }
+
+    /**
+     * Rebuilds the mailbox of an agent at a sequence, in the order the messages arrived.
+     *
+     * @param messages    messages to consider
+     * @param agent       receiving agent
+     * @param sequenceCut sequence at which the mailbox is observed
+     * @return messages that had arrived at the agent and were not consumed at the sequence, oldest first
+     */
+    public List<Message> mailbox(List<Message> messages, String agent, long sequenceCut) {
+        List<Message> mailbox = new ArrayList<>();
+        for (Message m : messages) {
+            if (!m.getReceiver().equals(agent) || m.getArrival() == null) {
+                continue;
+            }
+            if (aliveAt(m.getArrival().sequence(), m.getEnd() == null ? null : m.getEnd().sequence(), sequenceCut)) {
+                mailbox.add(m);
+            }
+        }
+        mailbox.sort(Comparator.comparingLong((Message m) -> m.getArrival().sequence()));
+        return mailbox;
     }
 
     /**

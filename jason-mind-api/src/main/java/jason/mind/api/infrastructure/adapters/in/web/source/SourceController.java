@@ -35,7 +35,7 @@ public class SourceController {
             SourcesOut out = this.findSources.execute(new FindSourcesIn(request.getPathVariable("name")));
             int h = 1;
             for (SourcesOut.FileOut f : out.files()) {
-                h = 31 * h + f.path().hashCode() * 17 + f.content().length();
+                h = 31 * h + f.path().hashCode() * 17 + f.content().hashCode();
             }
             return WebExchange.withETag(request, "sources:" + Integer.toHexString(h), () -> out);
         });

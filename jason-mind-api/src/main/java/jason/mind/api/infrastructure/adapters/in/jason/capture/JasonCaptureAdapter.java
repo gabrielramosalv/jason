@@ -786,7 +786,10 @@ public final class JasonCaptureAdapter implements ReasoningListener {
         }
         TrackedPlan tp = this.plans.get(this.execIM.getPlan());
         Integer deed = tp == null ? null : this.index(this.execIM.getPlan()).indexOf(this.execIM.getCurrentStep());
-        this.execCause = tp == null || tp.id < 0 ? CauseIn.by(ti.id) : new CauseIn(ti.id, tp.id, deed);
+        // quem age é o objetivo do topo da pilha (o IntendedMeans); a intenção só quando ele não foi rastreado
+        TrackedIM executing = this.ims.get(this.execIM);
+        long doer = executing != null && executing.id >= 0 ? executing.id : ti.id;
+        this.execCause = tp == null || tp.id < 0 ? CauseIn.by(doer) : new CauseIn(doer, tp.id, deed);
     }
 
     /**
@@ -809,8 +812,7 @@ public final class JasonCaptureAdapter implements ReasoningListener {
         }
 
         this.record(
-                new RecordOccurrenceIn.Change(this.agent, this.stepMoment, CauseIn.by(this.execCause.byId()), tim.id,
-                        "currentDeed", deed));
+                new RecordOccurrenceIn.Change(this.agent, this.stepMoment, null, tim.id, "currentDeed", deed));
     }
 
     /**

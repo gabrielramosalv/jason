@@ -1,0 +1,162 @@
+{
+  "header": {
+    "w": 1440,
+    "h": 36,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "12px"
+  },
+  "railLeft": {
+    "w": 37,
+    "h": 864,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "4px"
+  },
+  "railRight": {
+    "w": 37,
+    "h": 828,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "4px"
+  },
+  "agentSidebar": {
+    "w": 201,
+    "h": 864,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "normal"
+  },
+  "agentRow": {
+    "w": 192,
+    "h": 28,
+    "radius": "6px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "4px"
+  },
+  "topBar": {
+    "w": 1202,
+    "h": 36,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "12px"
+  },
+  "iconButton": {
+    "w": 28,
+    "h": 28,
+    "radius": "6px",
+    "font": "11.5px",
+    "weight": "500",
+    "bg": "rgb(43, 44, 45)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "4px"
+  },
+  "panelCode": {
+    "w": 582,
+    "h": 490,
+    "radius": "10px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "normal"
+  },
+  "panelInt": {
+    "w": 265,
+    "h": 490,
+    "radius": "10px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "normal"
+  },
+  "panelBel": {
+    "w": 265,
+    "h": 490,
+    "radius": "10px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "normal"
+  },
+  "panelConsole": {
+    "w": 1120,
+    "h": 326,
+    "radius": "10px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgb(31, 30, 30)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "normal"
+  },
+  "panelHeader": {
+    "w": 580,
+    "h": 36,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "8px"
+  },
+  "tabButton": {
+    "w": 88,
+    "h": 28,
+    "radius": "6px",
+    "font": "12.8px",
+    "weight": "500",
+    "bg": "rgb(43, 44, 45)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "8px"
+  },
+  "sectionHead": {
+    "w": 263,
+    "h": 31,
+    "radius": "0px",
+    "font": "12.8px",
+    "weight": "400",
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(239, 239, 238)",
+    "gap": "8px"
+  },
+  "chip": {
+    "w": 79,
+    "h": 22,
+    "radius": "6px",
+    "font": "11.5px",
+    "weight": "400",
+    "bg": "rgb(18, 38, 25)",
+    "color": "rgb(61, 214, 140)",
+    "gap": "normal"
+  },
+  "gapCodeInt": 4,
+  "gapTopConsole": 4,
+  "edges": {
+    "left": 4,
+    "top": 4,
+    "bottom": 4,
+    "right": 4
+  },
+  "rootBg": "rgb(19, 18, 18)",
+  "rootColor": "rgb(239, 239, 238)"
+}

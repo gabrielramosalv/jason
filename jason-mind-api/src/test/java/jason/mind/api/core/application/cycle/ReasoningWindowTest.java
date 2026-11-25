@@ -6,6 +6,7 @@ import jason.mind.api.core.domain.model.history.CycleRecord;
 import jason.mind.api.core.domain.model.timeline.Moment;
 import jason.mind.api.core.domain.model.timeline.Occurrence;
 import jason.mind.api.core.domain.model.timeline.ReasoningStep;
+import jason.mind.api.core.domain.service.history.EffectsDomainService;
 import jason.mind.api.core.domain.service.reasoning.CandidatesDomainService;
 import jason.mind.api.core.domain.service.reasoning.QueueDomainService;
 import jason.mind.api.core.ports.in.cycle.CyclesOut;
@@ -33,7 +34,7 @@ class ReasoningWindowTest {
         }
         repo.prune("bob", 11);
         CyclesOut out = new ListCyclesUseCase(query).execute(new ListCyclesIn("bob", null, null));
-        FindCycleReasoningUseCase uc = new FindCycleReasoningUseCase(query, new CandidatesDomainService(), new QueueDomainService());
+        FindCycleReasoningUseCase uc = new FindCycleReasoningUseCase(query, new CandidatesDomainService(), new QueueDomainService(), new EffectsDomainService());
         for (CyclesOut.CycleItem i : out.cycles()) {
             assertNotNull(uc.execute(new FindCycleReasoningIn("bob", i.cycle())));
         }

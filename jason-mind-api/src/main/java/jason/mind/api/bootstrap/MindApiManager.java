@@ -1,6 +1,7 @@
 package jason.mind.api.bootstrap;
 
 import jason.mind.api.infrastructure.adapters.in.web.TimedJsonConverter;
+import jason.mind.api.infrastructure.adapters.in.web.ui.UiController;
 import jason.mind.api.infrastructure.metrics.MindTiming;
 import jason.architecture.MindInspectorWeb;
 import jason.asSemantics.Agent;
@@ -63,6 +64,8 @@ public class MindApiManager extends MindInspectorWeb {
         TimedJsonConverter.install();
         this.app = PeelAppBuilder.run(builder -> {
             builder.port(port).host(System.getProperty("mind.host", "127.0.0.1"));
+            // UI empacotada pelo módulo jason-mind-ui, servida na mesma origem da API [D-154]
+            builder.staticContentPath(UiController.RESOURCE_FOLDER);
             if (MindTiming.TIMING) {
                 builder.requestObserver((method, path, status, startNanos, endNanos) ->
                         MindTiming.addRequest(endNanos - startNanos));
@@ -70,6 +73,7 @@ public class MindApiManager extends MindInspectorWeb {
             for (Object c : this.module.controllers()) {
                 builder.addController(c);
             }
+            builder.addController(new UiController());
         });
         this.app.start();
         LOGGER.info("Mind API at http://127.0.0.1:" + port + "/api/mas");

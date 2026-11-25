@@ -2,7 +2,7 @@ package jason.mind.api.core.domain.service.reasoning;
 
 /**
  * Rule that explains the outcome of a candidate in a selection step.
- * Covers the event, option and intention selections.
+ * Covers the event, option, intention and message selections.
  *
  * @author Gabriel Lima
  */
@@ -36,5 +36,11 @@ public enum SelectionRule {
     PLAN_CUSTOM,
 
     /** The chosen intention was the first of the queue. */
-    SELECT_INTENTION_ROUND_ROBIN
+    SELECT_INTENTION_ROUND_ROBIN,
+
+    /** The chosen message was the first of the mailbox. */
+    SELECT_MESSAGE_FIFO,
+
+    /** The message was chosen by a custom selection function. */
+    SELECT_MESSAGE_CUSTOM
 }

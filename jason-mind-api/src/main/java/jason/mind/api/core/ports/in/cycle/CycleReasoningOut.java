@@ -25,13 +25,27 @@ public record CycleReasoningOut(String agent, int cycle, List<StepOut> steps) {
      * @param inputs       entities given to the step
      * @param chosen       chosen entity, or null
      * @param candidates   candidates considered
-     * @param created      entities created in the step
+     * @param created      entities created in the step, each with the sequence of its occurrence
      * @param changed      changes made in the step
-     * @param removed      entities removed in the step
+     * @param removed      entities removed in the step, each with the sequence of its occurrence
+     * @param effects      what entities of the step did to other entities in it: generated, modified or removed them
      */
     public record StepOut(String step, String phase, int iteration, int ordinal, String searchMethod,
                           List<EntityRefOut> inputs, EntityRefOut chosen, List<CandidateOut> candidates,
-                          List<EntityRefOut> created, List<ChangeOut> changed, List<EntityRefOut> removed) {
+                          List<OccurrenceOut> created, List<ChangeOut> changed, List<OccurrenceOut> removed,
+                          List<EffectOut> effects) {
+
+    }
+
+    /**
+     * Entity that was created or removed in a step, with the occurrence that did it.
+     *
+     * @param type     type of the entity
+     * @param id       identifier of the entity
+     * @param label    label of the entity
+     * @param sequence sequence of the occurrence, the total order of the facts inside the agent
+     */
+    public record OccurrenceOut(String type, String id, String label, long sequence) {
 
     }
 
@@ -78,8 +92,21 @@ public record CycleReasoningOut(String agent, int cycle, List<StepOut> steps) {
      * @param label    label of the entity
      * @param timeline name of the timeline
      * @param value    new value
+     * @param sequence sequence of the occurrence, the total order of the facts inside the agent
      */
-    public record ChangeOut(String type, String id, String label, String timeline, String value) {
+    public record ChangeOut(String type, String id, String label, String timeline, String value, long sequence) {
+
+    }
+
+    /**
+     * Effect of an entity on another one in a step.
+     *
+     * @param kind   kind of the effect: GENERATES, MODIFIES or REMOVES
+     * @param by     identifier of the entity that caused it
+     * @param entity entity that was generated, modified or removed
+     * @param sequence sequence of the occurrence of the effect
+     */
+    public record EffectOut(String kind, String by, EntityRefOut entity, long sequence) {
 
     }
 }

@@ -25,7 +25,7 @@ public class LifecycleController {
 
     /**
      * Returns the lifecycle of the entity whose agent and id are given in the path, paginated by the
-     * {@code after} and {@code limit} parameters.
+     * {@code after}, {@code before}, {@code limit} and {@code order} parameters.
      *
      * @param request HTTP request carrying the agent name, the entity id and the pagination parameters
      * @return response with the lifecycle of the entity
@@ -34,6 +34,7 @@ public class LifecycleController {
     public Response getLifecycle(Request request) {
         return WebExchange.handle("lifecycle", () -> Responses.ok(this.findEntityLifecycle.execute(
                 new FindEntityLifecycleIn(request.getPathVariable("name"), request.getPathVariable("id"),
-                        WebExchange.longValue(request, "after"), WebExchange.integer(request, "limit")))));
+                        WebExchange.longValue(request, "after"), WebExchange.longValue(request, "before"),
+                        WebExchange.integer(request, "limit"), request.getParameter("order")))));
     }
 }

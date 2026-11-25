@@ -1,16 +1,13 @@
 package jason.mind.api.core.domain.model.timeline;
 
-import jason.mind.api.core.domain.model.history.OccurrenceRecord;
 import lombok.Getter;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Base of every entity whose life is recorded in the history.
- * Keeps its identifier, start and end and the occurrences it caused, and exposes its timelines. Equality is by
+ * Keeps its identifier, start and end, and exposes its timelines. Equality is by
  * identity.
  *
  * @author Gabriel Lima
@@ -26,9 +23,6 @@ public abstract class Entity {
 
     /** Occurrence that ended the entity, or null while alive. */
     private volatile Occurrence end;
-
-    /** Occurrences caused by the entity, in recording order, or null until the first one. */
-    private volatile AppendOnlyList<OccurrenceRecord> effects;
 
     /**
      * Creates the entity with its identifier and start occurrence.
@@ -59,54 +53,6 @@ public abstract class Entity {
             throw new IllegalStateException("end before start");
         }
         this.end = end;
-    }
-
-    /**
-     * Appends an occurrence caused by the entity. Synchronized because a message may cause occurrences in its sender
-     * and in its receiver.
-     *
-     * @param effect occurrence whose cause is this entity
-     */
-    public synchronized void addEffect(OccurrenceRecord effect) {
-        AppendOnlyList<OccurrenceRecord> l = this.effects;
-        if (l == null) {
-            l = new AppendOnlyList<>();
-            this.effects = l;
-        }
-        l.add(effect);
-    }
-
-    /**
-     * Returns the occurrences caused by the entity.
-     *
-     * @return snapshot of the occurrences caused by the entity, in recording order
-     */
-    public List<OccurrenceRecord> getEffects() {
-        AppendOnlyList<OccurrenceRecord> l = this.effects;
-        return l == null ? List.of() : l.snapshot();
-    }
-
-    /**
-     * Drops the occurrences caused by the entity in an agent before the horizon cycle of that agent.
-     *
-     * @param agent        name of the agent whose occurrences are dropped
-     * @param horizonCycle first cycle whose occurrences are kept
-     */
-    public synchronized void pruneEffectsBefore(String agent, int horizonCycle) {
-        AppendOnlyList<OccurrenceRecord> l = this.effects;
-        if (l == null) {
-            return;
-        }
-        List<OccurrenceRecord> all = l.snapshot();
-        List<OccurrenceRecord> kept = new ArrayList<>(all.size());
-        for (OccurrenceRecord r : all) {
-            if (r.occurrence().cycle() >= horizonCycle || !r.occurrence().agent().equals(agent)) {
-                kept.add(r);
-            }
-        }
-        if (kept.size() != all.size()) {
-            l.replaceAll(kept);
-        }
     }
 
     /**

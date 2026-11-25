@@ -11,9 +11,11 @@ import jason.mind.api.core.application.settings.InvalidSettingsException;
 import net.peelweb.context.endpoint.Request;
 import net.peelweb.context.endpoint.Response;
 import net.peelweb.context.endpoint.Responses;
+import net.peelweb.enums.HttpResponseCode;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -49,6 +51,62 @@ public final class WebExchange {
     }
 
 /**
+     * Runs a write route after checking where the request comes from (D-155): the {@code Host} must be a local
+     * name, an {@code Origin} must be the server itself, and the body must be declared as JSON. The last rule
+     * turns even the empty POST of a prune into a request a browser has to preflight, which Peel Web denies.
+     *
+     * @param name    name of the route, used to attribute the timing
+     * @param request HTTP request of the write
+     * @param route   code of the route
+     * @return forbidden or unsupported media type when the request is refused, otherwise the response of the route
+     */
+    public static Response write(String name, Request request, Supplier<Response> route) {
+        Response refused = refuseWrite(request);
+        return refused != null ? refused : handle(name, route);
+    }
+
+    /**
+     * Applies the origin rules of the writes.
+     *
+     * @param request HTTP request of the write
+     * @return the refusal response, or {@code null} when the write may proceed
+     */
+    static Response refuseWrite(Request request) {
+        String host = request.getHeader("Host");
+        if (!allowedHost(host)) {
+            return Responses.error(HttpResponseCode.FORBIDDEN, "host not allowed");
+        }
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.equals("http://" + host) && !origin.equals("https://" + host)) {
+            return Responses.error(HttpResponseCode.FORBIDDEN, "origin not allowed");
+        }
+        String type = request.getHeader("Content-Type");
+        if (type == null || !type.toLowerCase(Locale.ROOT).startsWith("application/json")) {
+            return Responses.error(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE, "content type must be application/json");
+        }
+        return null;
+    }
+
+    /**
+     * Tells whether a {@code Host} header names this machine: {@code localhost}, {@code 127.0.0.1}, {@code [::1]}
+     * or the address the server was told to listen on ({@code mind.host}), with any port.
+     *
+     * @param host value of the {@code Host} header, may be {@code null}
+     * @return {@code true} when the name is allowed
+     */
+    static boolean allowedHost(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        String name = host.startsWith("[") ? host.substring(0, host.indexOf(']') + 1)
+                : host.contains(":") ? host.substring(0, host.indexOf(':')) : host;
+        name = name.toLowerCase(Locale.ROOT);
+        String configured = System.getProperty("mind.host");
+        return name.equals("localhost") || name.equals("127.0.0.1") || name.equals("[::1]")
+                || configured != null && !configured.equals("0.0.0.0") && name.equalsIgnoreCase(configured);
+    }
+
+    /**
      * Runs a route and translates the known exceptions into HTTP responses: not found, gone and bad request.
      * Any other runtime exception is logged and answered with an internal server error.
      *
@@ -147,6 +205,12 @@ public final class WebExchange {
     }
 
     /**
+     * Identity of this run of the MAS, prefixed to every ETag. Without it two runs produce the same tag for the same
+     * cycle ({@code 7:intentions}), and a browser holding the previous run answers 304 with the old body.
+     */
+    private static final String RUN_ID = Long.toHexString(System.currentTimeMillis());
+
+    /**
      * Answers a request with an ETag, returning not modified when the {@code If-None-Match} header matches it.
      * The body is only built when the response is not a not modified one.
      *
@@ -156,7 +220,7 @@ public final class WebExchange {
      * @return ok response with the body, or not modified, both carrying the ETag header
      */
     public static Response withETag(Request request, String etag, Supplier<Object> body) {
-        String quoted = "\"" + etag + "\"";
+        String quoted = "\"" + RUN_ID + "-" + etag + "\"";
         String inm = request.getHeader("If-None-Match");
         if (inm != null && matches(inm, quoted)) {
             return Responses.notModified().header("ETag", quoted);
